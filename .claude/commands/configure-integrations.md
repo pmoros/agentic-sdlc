@@ -1,0 +1,1 @@
+../../.agents/commands/configure-integrations.prompt.md

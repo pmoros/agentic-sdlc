@@ -1,0 +1,43 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// VS Code Multi-Root Workspace — example file
+//
+// Copy this file to: agentic-sdlc.code-workspace
+// (the .code-workspace file is gitignored — it is personal to each developer)
+//
+// RECOMMENDED FOLDER LAYOUT
+// Place this repo alongside the other repos you work with:
+//
+//   repos/
+//   ├── agentic-sdlc/       ← this repo (tools)
+//   ├── work-sessions/      ← session state + worktrees
+//   ├── your-app-repo/
+//   └── ...
+//
+// All paths below are relative to this file (repo root).
+// Sibling repos are "../<repo-name>".
+//
+// Session worktrees are NOT tracked here — they live under
+// work-sessions/sessions/<id>/worktrees/, which has its own
+// workspace file for that purpose.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  "folders": [
+    // ── This repo ────────────────────────────────────────────────────────────
+    {
+      "name": "agentic-sdlc",
+      "path": "."
+    },
+
+    // ── Sibling repos ────────────────────────────────────────────────────────
+    // Add the repos you actively work with. Comment out repos not in scope.
+    {
+      "name": "work-sessions",
+      "path": "../work-sessions"
+    },
+    {
+      "name": "your-app-repo",
+      "path": "../your-app-repo"
+    }
+  ],
+  "settings": {}
+}

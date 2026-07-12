@@ -1,0 +1,1 @@
+../../.agents/commands/set-repo-doctrine.prompt.md

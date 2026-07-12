@@ -1,0 +1,1 @@
+../../.agents/commands/enable_flex_mode.prompt.md

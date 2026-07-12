@@ -1,0 +1,1 @@
+../../.agents/agents/project-manager.md

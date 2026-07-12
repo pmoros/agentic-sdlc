@@ -1,0 +1,1 @@
+../../.agents/commands/sync-work.prompt.md

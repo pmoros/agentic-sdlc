@@ -1,0 +1,85 @@
+{
+  "inputs": [
+    {
+      "id": "atlassian-jira-url",
+      "type": "promptString",
+      "description": "Atlassian Jira URL (e.g. https://yourcompany.atlassian.net)"
+    },
+    {
+      "id": "atlassian-confluence-url",
+      "type": "promptString",
+      "description": "Atlassian Confluence URL (e.g. https://yourcompany.atlassian.net/wiki)"
+    },
+    {
+      "id": "atlassian-username",
+      "type": "promptString",
+      "description": "Atlassian account email"
+    },
+    {
+      "id": "atlassian-api-token",
+      "type": "promptString",
+      "description": "Atlassian API token (classic) — stored in system keychain",
+      "password": true
+    },
+    {
+      "id": "aws-profile",
+      "type": "promptString",
+      "description": "AWS CLI profile name (e.g. default, or your SSO profile)"
+    },
+    {
+      "id": "aws-region",
+      "type": "promptString",
+      "description": "AWS region (e.g. us-east-1)"
+    }
+  ],
+  "servers": {
+    "fetch-complex": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "mcp-atlassian": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "JIRA_URL",
+        "-e", "JIRA_USERNAME",
+        "-e", "JIRA_API_TOKEN",
+        "-e", "CONFLUENCE_URL",
+        "-e", "CONFLUENCE_USERNAME",
+        "-e", "CONFLUENCE_API_TOKEN",
+        "ghcr.io/sooperset/mcp-atlassian:0.21.0"
+      ],
+      "env": {
+        "JIRA_URL": "${input:atlassian-jira-url}",
+        "JIRA_USERNAME": "${input:atlassian-username}",
+        "JIRA_API_TOKEN": "${input:atlassian-api-token}",
+        "CONFLUENCE_URL": "${input:atlassian-confluence-url}",
+        "CONFLUENCE_USERNAME": "${input:atlassian-username}",
+        "CONFLUENCE_API_TOKEN": "${input:atlassian-api-token}"
+      },
+      "type": "stdio"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "aws-api": {
+      "command": "uvx",
+      "args": ["awslabs.aws-api-mcp-server@latest"],
+      "env": {
+        "AWS_PROFILE": "${input:aws-profile}",
+        "AWS_REGION": "${input:aws-region}",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    },
+    "aws-docs": {
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "type": "stdio"
+    }
+  }
+}

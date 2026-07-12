@@ -1,0 +1,1 @@
+../../.agents/commands/stop_work_session.prompt.md

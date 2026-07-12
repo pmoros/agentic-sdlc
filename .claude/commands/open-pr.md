@@ -1,0 +1,1 @@
+../../.agents/commands/open-pr.prompt.md

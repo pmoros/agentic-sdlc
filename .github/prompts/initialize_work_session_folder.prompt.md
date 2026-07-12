@@ -1,0 +1,1 @@
+../../.agents/commands/initialize_work_session_folder.prompt.md

@@ -1,0 +1,42 @@
+# ─── Copilot / Agent tooling ─────────────────────────────────────────────────
+.copilot-doctrine.md
+sessions/
+.github/instructions/*.local.*
+.agents/rules/*.local.*
+.claude/settings.local.json
+
+# ─── VS Code ─────────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/mcp.example.json
+# mcp.json is gitignored — copy from mcp.example.json and fill in credentials
+.vscode/mcp.json
+# Workspace files may contain local absolute paths — gitignore them or commit
+# a sanitised version explicitly.
+*.code-workspace
+
+# ─── macOS ───────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+
+# ─── Editors ─────────────────────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+.idea/
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# ─── Temp / scratch ──────────────────────────────────────────────────────────
+/tmp/
+*.tmp
+*.bak
