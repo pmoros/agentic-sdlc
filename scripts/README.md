@@ -11,9 +11,18 @@ agent each time.
 | `session-tmux.sh` | Guarded tmux lifecycle helper (`ensure` / `attach-hint` / `kill`); loads the session `.env` into the tmux env on `ensure` | init/resume/stop/end |
 | `aws-login.sh` | (Re)authenticate AWS SSO profiles — checks `sts get-caller-identity`, only runs `aws sso login` when expired, enforces the session `.env` allow-list | `#aws-reauth` |
 | `session-log.sh` | Append a consistent timestamped line to a session's `WORKLOG.md` / `CONTEXT.md` activity log | session-state rule + lifecycle commands |
+| `security-check.sh` | Secret scan (`gitleaks`) + shell static analysis (`shellcheck`) + workflow lint (`actionlint`) — same checks CI runs | `.github/workflows/ci.yml`, run manually before pushing |
 
 Add org-specific scripts here as you need them — see the Tests section below
 for the standard every new script should meet.
+
+## Tooling versions
+
+The tools `security-check.sh` shells out to (`gitleaks`, `shellcheck`,
+`actionlint`) are pinned in `../.mise.toml` — run `mise install` once (after
+`mise trust` on first use) to fetch exactly those versions. CI installs the
+same pinned versions via the `jdx/mise-action` GitHub Action, so a clean local
+run of `scripts/security-check.sh` should never disagree with CI.
 
 ## Tests
 
@@ -37,6 +46,8 @@ pytest or the stdlib runner, and the whole suite runs from one command:
 | `tests/test_create_worktree.py` | `create-worktree.sh` detach/branch/refresh, dirty-source guard, arg validation — against throwaway bare+clone repos, no AWS/node |
 | `tests/test_init_session.py` | `init-session.sh` folder+CONTEXT+registry+worktree+tmux, against a minimal work-sessions repo + scratch agentic repo |
 | `tests/test_session_log.py` | `session-log.sh` timestamped append to WORKLOG / CONTEXT, `--to` targeting, append-not-clobber, error paths |
+| `tests/test_aws_login.py` | `aws-login.sh` expired/valid-token paths, `--all`/`--list`, allow-list enforcement — against a stubbed `aws` CLI, no real AWS |
+| `tests/test_security_check.py` | `security-check.sh` secrets/shell/actions checks each catch a real planted issue and pass on clean fixtures — against throwaway repos, no touching this repo's own history |
 
 `scripts/tests/_harness.py` holds the shared helpers (throwaway git repos, a
 minimal work-sessions repo, a temp-dir base `TestCase`). Tests never touch real

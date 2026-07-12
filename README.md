@@ -53,6 +53,22 @@ everything so it survives across machines and time.
    from your agent. It creates a session folder in `work-sessions`, registers
    it, and sets up worktrees for this repo plus any target repos.
 
+## Security checks & CI
+
+This repo pins its dev/CI tooling with [mise](https://mise.jdx.dev) — run
+`mise trust && mise install` once to fetch the exact `gitleaks` / `shellcheck`
+/ `actionlint` versions declared in `.mise.toml`. Run all checks locally with:
+
+```bash
+scripts/security-check.sh          # secrets + shell lint + workflow lint
+scripts/security-check.sh secrets  # just the gitleaks secret scan
+```
+
+`.github/workflows/ci.yml` runs the same checks (via the same pinned
+versions, installed by the `jdx/mise-action` GitHub Action) plus the
+`scripts/tests/` suite on every push and PR — a clean local run should never
+disagree with CI.
+
 ## Reference Repo Policy
 
 Every repo under `repos/` — including this one — is a
@@ -96,7 +112,10 @@ purpose.
 | `.agents/commands/` | Command prompts (source of truth), symlinked into `.claude/commands/` and `.github/prompts/` |
 | `.agents/rules/` | Auto-loaded rules — integration schemas (Atlassian, AWS, GitHub), engineering doctrine, production-deployment policy, session-state maintenance — symlinked into `.github/instructions/` |
 | `.agents/skills/` | Auto-discovered skills (session orchestration, planning, design), symlinked into `.claude/skills/` |
-| `scripts/` | Deterministic automation the commands above shell out to (worktree creation, session init, tmux) — see `scripts/README.md` |
+| `scripts/` | Deterministic automation the commands above shell out to (worktree creation, session init, tmux, security checks) — see `scripts/README.md` |
+| `runbooks/` | Guided operational procedures for org-specific SOPs — empty by default, see `runbooks/README.md` |
+| `.github/workflows/` | CI — secret scan + shell/workflow lint + script tests on every push/PR |
+| `.mise.toml` | Pinned versions of the tools CI and `scripts/security-check.sh` use |
 | `docs/` | Reference documentation (e.g. the worktree/CoW deep-dive) |
 | `02-adrs/` | Architecture Decision Records for this repo's own tooling/process |
 | `01-scratchpad/` | Drafts and experiments |

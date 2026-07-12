@@ -1,0 +1,8 @@
+# Pinned tool versions for local dev and CI — run `mise install` to fetch
+# exactly these, so "it works on my machine" and "it works in CI" are the
+# same machine. See https://mise.jdx.dev.
+[tools]
+shellcheck = "0.11.0"   # scripts/*.sh static analysis
+actionlint = "1.7.12"   # .github/workflows/*.yml static analysis
+gitleaks = "8.30.1"     # secret scanning
+python = "3.12"         # scripts/tests (stdlib unittest, no extra deps required)
