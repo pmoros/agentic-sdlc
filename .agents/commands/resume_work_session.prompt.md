@@ -1,6 +1,12 @@
 # Resume Work Session
 
-You are resuming a previously paused or stopped work session. Follow these steps in order.
+You are resuming a previously paused or stopped work session. **This command
+is designed to run at the start of a fresh conversation** — it reconstructs
+everything needed from the session's files (`CONTEXT.md`, `TASKS.md`, etc.),
+not from a continued chat transcript. If this is being run inside a
+long-running conversation that never ended, say so and suggest starting a
+new one instead; see `AGENTS.md` § Model & Context Discipline. Follow these
+steps in order.
 
 ## Steps
 
@@ -27,7 +33,9 @@ Read `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md` and `TASKS.md`. Sho
 
 ### 3. Ask orientation questions
 
-Ask the user:
+Load `.agents/rules/session-state.instructions.md` for the current file
+conventions — steps below update `CONTEXT.md` and append to the Activity log
+per that contract. Ask the user:
 
 1. **Has anything changed since you paused?** — new requirements, resolved blockers, scope changes? (press Enter if nothing changed)
 2. **Is the goal still accurate?** — show the current Overview line, ask to confirm or update

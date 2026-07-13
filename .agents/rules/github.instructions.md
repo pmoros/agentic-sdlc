@@ -1,5 +1,11 @@
 # GitHub Integration — Structural Schema
 
+> **Trigger:** read this file before any PR, branch, or commit-adjacent
+> GitHub operation. Not auto-loaded — see `AGENTS.md` § Integration Schemas
+> and `02-adrs/0001-tiered-conditional-rule-loading.md`. Operation-triggered,
+> so it has no reliable GitHub Copilot `applyTo:` glob; Copilot users open
+> this file manually before GitHub work.
+
 <!--
   This file is COMMITTED to the repository.
   Do NOT include personal preferences, reviewer usernames, or personal defaults here.

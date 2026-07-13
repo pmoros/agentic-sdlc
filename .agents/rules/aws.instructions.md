@@ -1,4 +1,16 @@
+---
+applyTo: "**/*.tf,**/cdk/**,**/*.cfn.yaml,**/*.cfn.yml,**/*.cfn.json,**/serverless.yml,**/*.sam.yaml"
+---
+
 # AWS Integration — Structural Schema (Template)
+
+> **Trigger:** read this file before any AWS CLI/MCP call or
+> Infrastructure-as-Code (CDK/Terraform/CloudFormation/SAM/Serverless)
+> operation. Not auto-loaded — see `AGENTS.md` § Integration Schemas and
+> `02-adrs/0001-tiered-conditional-rule-loading.md`. The `applyTo` glob above
+> scopes GitHub Copilot to IaC file types — a best-effort approximation, not
+> exact: an AWS CLI-only session that touches no IaC files still needs a
+> manual read.
 
 <!--
   This file is COMMITTED to the repository.

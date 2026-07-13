@@ -2,6 +2,11 @@
 
 Create a new pull request or refresh an existing one. This command is idempotent — safe to run again after major changes to update the PR description.
 
+Load `.agents/rules/github.instructions.md` before any GitHub operation
+below — not auto-loaded (see `AGENTS.md` § Integration Schemas); it defines
+the PR body template, checklist, and title/commit conventions this command
+follows in steps 3–4.
+
 ## Tool Priority
 
 Always prefer GitHub MCP tools over `gh` CLI. Before any GitHub operation, load tools with `tool_search_tool_regex` using pattern `mcp_github_`. Fall back to `gh` CLI only if the required MCP tool does not exist after searching.

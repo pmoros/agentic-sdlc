@@ -1,5 +1,14 @@
 # Deployment Policy
 
+> **Trigger:** read this file before authoring or executing a deployment
+> definition (`#define_deployment`, `#start_guided_deployment`) — i.e.
+> before any change to a production or customer-facing environment. Not
+> auto-loaded — see `AGENTS.md` § Integration Schemas and
+> `02-adrs/0001-tiered-conditional-rule-loading.md`. The deployment artifacts
+> this file governs live in the sibling `work-sessions` repo, so it has no
+> reliable GitHub Copilot `applyTo:` glob from this repo; Copilot users open
+> this file manually before deployment work.
+
 Any operation that **changes a production environment** — deploy/apply/migrate/
 scale/DNS/route/config change against production cloud infra, managed
 services, databases, or customer-facing systems — MUST have a written

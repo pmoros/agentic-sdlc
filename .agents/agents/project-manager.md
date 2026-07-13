@@ -139,7 +139,8 @@ comment) is a guarded operation and needs explicit user approval first (see
 `AGENTS.md` → Approval Protocol). Reads are fine. Before any Jira operation,
 read `.agents/rules/atlassian.instructions.md` (field contract, priorities,
 known automation quirks — e.g. auto-reassignment on create or on linking to a
-parent). For GitHub, prefer MCP tools per `.agents/rules/github.instructions.md`.
+parent). Before any GitHub operation, read `.agents/rules/github.instructions.md`
+and prefer MCP tools per its priority order.
 
 Common flows:
 - **Backlog sync**: pull `assignee = currentUser() AND resolution = Unresolved`

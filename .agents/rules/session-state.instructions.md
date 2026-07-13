@@ -1,5 +1,13 @@
 # Session State Maintenance
 
+> **Trigger:** read this file at session start, and whenever
+> `#pause_work_session`, `#resume_work_session`, `#stop_work_session`, or
+> `#end_work_session` runs — each of those commands loads it explicitly. Not
+> auto-loaded — see `AGENTS.md` § Integration Schemas and
+> `02-adrs/0001-tiered-conditional-rule-loading.md`. Command-triggered, so it
+> has no reliable GitHub Copilot `applyTo:` glob; Copilot users open this
+> file manually at those points.
+
 While a session is active, its tracking files are **living documents** — keep
 them current *as you work*, not only at lifecycle boundaries (start / pause /
 stop / end). If the session were resumed cold from these files alone, they
@@ -74,6 +82,13 @@ adding the entry — the session is not correctly tracked until you do.
 - **Flush before you lose context:** before pausing, switching tasks, opening a
   PR, or when the conversation is about to be summarized, write the current
   state into `CONTEXT.md` + `TASKS.md` first so nothing is stranded in memory.
+- **A flush is also a conversation boundary, not just a file write.** The
+  point of flushing is that a *new* conversation can pick up from the files
+  alone — so treat a flush as the moment to end the current conversation and
+  continue in a fresh one, not just as a checkpoint inside an ever-growing
+  one. This is what keeps a session's context (and cost) from growing
+  unbounded across a pause/resume cycle. See `AGENTS.md` § Model & Context
+  Discipline.
 
 The lifecycle commands (`#pause_work_session`, `#resume_work_session`,
 `#stop_work_session`, `#end_work_session`, `#sync-work`, `#define_deployment`,

@@ -25,7 +25,8 @@ Ask the user each of the following in sequence. Do not skip or combine.
 
 ### 3. Update session files
 
-Update `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md`:
+Load `.agents/rules/session-state.instructions.md` for the current file
+conventions, then update `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md`:
 - Set `- **Blocked:**` to `yes` if question 1 is `blocked`, else `no`.
 - Set `- **Description:**` to question 3's next-step sentence, prefixed with question 1's status if not plain `in-progress` (e.g. `waiting-for-review — <next step>`).
 - Append to `## Activity log`:
@@ -57,3 +58,9 @@ Remind the user:
 - Session state saved at `<work-sessions-repo>/sessions/<session-id>/`
 - Worktrees remain in place at `<work-sessions-repo>/sessions/<session-id>/worktrees/`
 - Resume any time with `#resume_work_session.prompt.md`
+
+**Recommend ending this conversation now.** File state is the durable
+record — this chat is not. `#resume_work_session.prompt.md` is designed to
+run in a fresh conversation; continuing this one across the break is the
+main way a session's context (and cost) grows unbounded. See `AGENTS.md` §
+Model & Context Discipline.

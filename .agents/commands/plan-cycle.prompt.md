@@ -36,8 +36,9 @@ items, one person). Recommend a rank; let the user adjust.
 For every `L`/`XL` item selected for the cycle, propose a breakdown into
 smaller, independently-shippable pieces (each ideally `S`/`M`). Big
 undecomposed items hide risk and stall. For each new sub-item, offer to create
-a `backlog.json` entry (and/or Jira sub-task, guarded — see
-`.agents/rules/atlassian.instructions.md`, noting the Epic-link/parent quirks).
+a `backlog.json` entry and/or a Jira sub-task (guarded). For the Jira write,
+load `.agents/rules/atlassian.instructions.md` first — it is not auto-loaded
+and covers the Epic-link/parent quirks.
 
 ## Step 4 — Capacity check
 

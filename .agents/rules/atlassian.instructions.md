@@ -1,5 +1,11 @@
 # Atlassian Integration — Structural Schema (Template)
 
+> **Trigger:** read this file before any Jira or Confluence operation (read,
+> create, update, transition, comment). Not auto-loaded — see `AGENTS.md` §
+> Integration Schemas and `02-adrs/0001-tiered-conditional-rule-loading.md`.
+> Operation-triggered, so it has no reliable GitHub Copilot `applyTo:` glob;
+> Copilot users open this file manually before Jira/Confluence work.
+
 This file is the **operational source of truth** for Jira/Confluence work
 driven from this repo. It ships with placeholder projects — replace the
 Quick Reference table and the per-project sections with your own org's

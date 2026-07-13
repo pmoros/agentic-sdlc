@@ -1,5 +1,12 @@
 # Development Lifecycle — Staged Pipeline with Gates
 
+> **Trigger:** read this file before design, implementation, QA, or a gate
+> review — loaded explicitly by the `design` skill, `#groom-item`, and the
+> `reviewer` agent (Gate A/QA). Not auto-loaded — see `AGENTS.md` §
+> Integration Schemas and `02-adrs/0001-tiered-conditional-rule-loading.md`.
+> Stage-triggered, so it has no reliable GitHub Copilot `applyTo:` glob;
+> Copilot users open this file manually at those points.
+
 The standard, **gated** lifecycle every non-trivial work item flows through —
 identical whether a human runs it interactively or the autonomous orchestrator
 drives it. It formalizes and *gates* the engineering doctrine (design-first, TDD,

@@ -11,18 +11,20 @@ machines and time.
 
 ## Integration Schemas
 
-Read these files **before any operation** with their respective system.
-They are the source of truth for project schemas, custom fields, allowed values, and known MCP limitations.
+**None of the files below auto-load.** Read the relevant file **before any
+operation** with that system — this is the loading mechanism, not a
+suggestion (see `02-adrs/0001-tiered-conditional-rule-loading.md`). Each file
+also self-declares its own trigger in a note near the top.
 
-| System | Schema file |
-|---|---|
-| Atlassian — Jira / Confluence | `.agents/rules/atlassian.instructions.md` |
-| AWS | `.agents/rules/aws.instructions.md` |
-| GitHub | `.agents/rules/github.instructions.md` |
-| Engineering doctrine (TDD/BDD/design-first/KIS) | `.agents/rules/engineering.instructions.md` |
-| Production deployments (risk/pre-flight/rollback) | `.agents/rules/deployments.instructions.md` |
-| Session state maintenance (keep tracking files live) | `.agents/rules/session-state.instructions.md` |
-| Development lifecycle (staged pipeline + Gate A/B) | `.agents/rules/dev-lifecycle.instructions.md` |
+| System | Schema file | Load when... |
+|---|---|---|
+| Atlassian — Jira / Confluence | `.agents/rules/atlassian.instructions.md` | before any Jira/Confluence read or write |
+| AWS | `.agents/rules/aws.instructions.md` | before any AWS CLI/MCP call or IaC (CDK/Terraform) operation |
+| GitHub | `.agents/rules/github.instructions.md` | before any PR/branch/commit-adjacent GitHub operation |
+| Production deployments (risk/pre-flight/rollback) | `.agents/rules/deployments.instructions.md` | before authoring or executing a deployment definition |
+| Development lifecycle (staged pipeline + Gate A/B) | `.agents/rules/dev-lifecycle.instructions.md` | before design, implementation, QA, or a gate review |
+| Session state maintenance (keep tracking files live) | `.agents/rules/session-state.instructions.md` | at session start, and at pause/resume/stop/end |
+| Engineering doctrine (TDD/BDD/design-first/KIS) | `.agents/rules/engineering.instructions.md` | before design or implementation — the compact reminder in Framework Rules below covers routine sessions |
 
 The Atlassian and AWS rule files ship as **templates** with placeholder
 projects/values — fill in your org's actual projects, fields, and
@@ -30,16 +32,12 @@ conventions before relying on them. Add further integration schemas here as
 your org adopts more systems (e.g. a monorepo build tool's gotchas, a
 different cloud provider, a different ticketing system).
 
-> `.github/instructions/` contains symlinks to these files for GitHub-native tooling compatibility.
-
-<!-- Claude Code: auto-load all rules -->
-@.agents/rules/atlassian.instructions.md
-@.agents/rules/aws.instructions.md
-@.agents/rules/github.instructions.md
-@.agents/rules/engineering.instructions.md
-@.agents/rules/deployments.instructions.md
-@.agents/rules/session-state.instructions.md
-@.agents/rules/dev-lifecycle.instructions.md
+> `.github/instructions/` contains symlinks to these files for GitHub-native
+> tooling compatibility. Where a rule's trigger correlates with a file type
+> (AWS/IaC), the symlinked copy carries `applyTo:` frontmatter so GitHub
+> Copilot scopes it natively. Operation-triggered rules (Jira, GitHub) have
+> no reliable Copilot file-glob equivalent — Copilot users open the file
+> manually before that operation. See ADR-0001 for the full rationale.
 
 ### Jira Execution Rule In This Manager Repo
 
@@ -373,10 +371,47 @@ If commit signing is not configured or signature verification fails, stop and te
 
 Universal engineering defaults (TDD, BDD, Design-first, Well-Architected, KIS)
 plus the Testing and Design doctrines live in
-`.agents/rules/engineering.instructions.md` (auto-loaded above). Surface the
-compact reminder `Engineering defaults: TDD · BDD · Design-first ·
-Well-Architected · KIS` at session start, alongside any repo-specific
-characteristics from `.copilot-doctrine.md`.
+`.agents/rules/engineering.instructions.md` — read it before design or
+implementation (see § Integration Schemas above; not auto-loaded, per
+ADR-0001). Surface the compact reminder `Engineering defaults: TDD · BDD ·
+Design-first · Well-Architected · KIS` at session start regardless, alongside
+any repo-specific characteristics from `.copilot-doctrine.md`.
+
+### Model & Context Discipline
+
+A **work session** (the ticket/branch/session-folder in `work-sessions`) is
+durable and may span days. The **conversation** you are having with the
+agent is not the same thing, and must not be treated as the persistence
+layer — file state (`CONTEXT.md`/`TASKS.md`/`PLAN.md`/`SPEC.md`/`WORKLOG.md`,
+per `.agents/rules/session-state.instructions.md`) is. One work session
+commonly spans **many** conversations.
+
+- **Default the interactive model to Sonnet 5 (or your runtime's equivalent
+  mid-tier model).** Switch deliberately to a top-tier model (Opus) for
+  planning, architecture, and final review — not as the ambient default for
+  routine execution. This mirrors the autonomy tiering in
+  `.agents/rules/dev-lifecycle.instructions.md`, applied to interactive work.
+- **Watch context growth, not just wall-clock time.** Check your runtime's
+  usage/cost indicator periodically (e.g. `/cost` in Claude Code, if
+  available). A conversation's cost per turn scales with how much of it gets
+  re-sent — that volume is what to manage, not a pricing cliff at any
+  specific token count.
+- **Flush and start fresh well before a conversation gets large.** As a
+  practical ceiling, treat combined context above roughly 100–150K tokens as
+  a signal to wrap up: flush state to the session files (see
+  `session-state.instructions.md`), then continue in a **new** conversation
+  rather than pushing the current one further. Don't let a large one-time
+  investigation (a big skill/doc dump, many large file reads, a long
+  subagent transcript) linger in a conversation that still has more work
+  ahead of it — isolate exploration into a subagent when the finding, not
+  the search, is what's needed back in the main thread.
+- **Pausing a work session means ending this conversation too.**
+  `#pause_work_session.prompt.md` flushes file state; once it's done, close
+  the conversation. `#resume_work_session.prompt.md` is designed to run in a
+  **new** conversation — it reconstructs enough context from the session
+  files, not from a continued transcript. Resuming by continuing the same
+  long-running chat defeats this and is the single most common way context
+  (and cost) grows unbounded across a break.
 
 ### Approval Protocol
 

@@ -17,8 +17,9 @@ Read `backlog.json`, `wip.json`, `scratchpad.json`, `INBOX.md`, and the current
 ## Step 2 — Optional Jira sync
 
 Ask (or honor an explicit `--sync` argument): "Sync from Jira first?" If yes,
-query `assignee = currentUser() AND resolution = Unresolved` (per
-`.agents/rules/atlassian.instructions.md`) and reconcile:
+load `.agents/rules/atlassian.instructions.md` for the field/status contract,
+then query `assignee = currentUser() AND resolution = Unresolved` and
+reconcile:
 - **New in Jira, not tracked** → add to `backlog.json` as `ready` (or match the
   live Jira status), with a `history` entry noting the sync.
 - **Tracked status disagrees with Jira** → record under "Status mismatches" in

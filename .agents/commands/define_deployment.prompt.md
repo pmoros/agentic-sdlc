@@ -5,10 +5,12 @@ description: Author a production deployment definition (risk analysis, pre-fligh
 
 # Define Deployment
 
-Produce the written deployment definition required by
-`.agents/rules/deployments.instructions.md`. **Mandatory before any production
-change; encouraged for non-prod deploys too** (same structure, filled briefly
-for Low-blast-radius non-prod work). Fills the five artifacts into a
+Load `.agents/rules/deployments.instructions.md` before drafting — it is not
+auto-loaded (see `AGENTS.md` § Integration Schemas) and is the source of truth
+for the five artifacts below. Produce the written deployment definition it
+requires. **Mandatory before any production change; encouraged for non-prod
+deploys too** (same structure, filled briefly for Low-blast-radius non-prod
+work). Fills the five artifacts into a
 `DEPLOYMENT.md` under the active session. This command only *authors* the plan
 — execution is a separate step (`#start_guided_deployment.prompt.md`).
 

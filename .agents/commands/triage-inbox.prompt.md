@@ -71,5 +71,6 @@ status). Then:
 - Note how many landed in `grooming` and need `#groom-item` before they're
   actionable.
 - Offer to run `#review-backlog` to refresh `WORK_STATE.md` counts.
-- If a triaged item should exist in Jira but doesn't, offer to create it
-  (with approval, per `.agents/rules/atlassian.instructions.md`).
+- If a triaged item should exist in Jira but doesn't, load
+  `.agents/rules/atlassian.instructions.md` for the field contract, then offer
+  to create it (with approval).

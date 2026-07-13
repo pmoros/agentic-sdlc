@@ -11,10 +11,13 @@ description: >
 
 # Design
 
-Produce a design/approach for a piece of work **before** any implementation, per
-the Design-first doctrine in `.agents/rules/engineering.instructions.md`
-(define the interface, contract, or schema first; propose and get approval
-before generating implementation). The output is a reviewable SPEC, not code.
+Load `.agents/rules/engineering.instructions.md` before starting — not
+auto-loaded (see `AGENTS.md` § Integration Schemas); the compact reminder in
+`AGENTS.md` covers routine sessions but this skill needs the full Design-first
+doctrine. Produce a design/approach for a piece of work **before** any
+implementation (define the interface, contract, or schema first; propose and
+get approval before generating implementation). The output is a reviewable
+SPEC, not code.
 
 State and session files live in the sibling `work-sessions` repo
 (`<work>` = `../work-sessions`). If a session is active for this
@@ -69,7 +72,10 @@ Constraints → Approach (with alternatives) → Interface/Schema → Test scena
 
 ### 5. Review gate
 
-Show the full design and ask for explicit approval before any implementation.
-Per the doctrine, do not generate implementation code until the design is
-agreed. If there are open questions, list them and get answers rather than
-guessing.
+Load `.agents/rules/dev-lifecycle.instructions.md` for the Gate A contract —
+a design goes through a **reviewer-agent critique (fresh context)** before
+the human approves; hand the SPEC to the `reviewer` agent for that critique.
+Then show the full design plus the reviewer's verdict and ask for explicit
+human approval before any implementation. Per the doctrine, do not generate
+implementation code until the design is agreed. If there are open questions,
+list them and get answers rather than guessing.

@@ -5,9 +5,10 @@ description: Execute a deployment definition step-by-step — pre-flight, gated 
 
 # Start Guided Deployment
 
-Execute a deployment defined by `#define_deployment.prompt.md`, enforcing
-`.agents/rules/deployments.instructions.md` and the Operational Safety
-three-phase protocol / approval protocol in `AGENTS.md`.
+Load `.agents/rules/deployments.instructions.md` before executing — not
+auto-loaded (see `AGENTS.md` § Integration Schemas). Execute a deployment
+defined by `#define_deployment.prompt.md`, enforcing that policy and the
+Operational Safety three-phase protocol / approval protocol in `AGENTS.md`.
 
 ## Steps
 

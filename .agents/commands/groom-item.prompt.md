@@ -26,7 +26,11 @@ and ask which to groom (or offer to groom the highest-priority one).
 
 ## Step 3 — Run the readiness checklist
 
-Score each dimension **clear / unclear / missing** and cite the evidence:
+Load `.agents/rules/dev-lifecycle.instructions.md` — `ready` is the entry
+criterion for Stage 0 (Planning & Decomposition) of that pipeline, so the
+checklist below should score against what Stage 0/1 actually need, not just
+generic completeness. Score each dimension **clear / unclear / missing** and
+cite the evidence:
 
 1. **Why** — is the motivation / problem / business value stated? Would a
    reviewer understand why this matters now?

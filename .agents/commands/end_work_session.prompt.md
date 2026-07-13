@@ -35,7 +35,8 @@ Do not block session closure if the user chooses to continue.
 
 ### 4. Update session files
 
-Update `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md`:
+Load `.agents/rules/session-state.instructions.md` for the current file
+conventions, then update `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md`:
 - Set `- **Description:**` to `ended — <summary from question 1>`.
 - Append to `## Activity log`:
   ```

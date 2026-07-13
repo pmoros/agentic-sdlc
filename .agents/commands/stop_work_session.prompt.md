@@ -28,7 +28,8 @@ Ask the user each of the following in sequence. Do not skip.
 
 ### 3. Update session files
 
-Update `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md`:
+Load `.agents/rules/session-state.instructions.md` for the current file
+conventions, then update `<work-sessions-repo>/sessions/<session-id>/CONTEXT.md`:
 - Set `- **Blocked:**` to `yes` if question 5 has content, else `no`.
 - Set `- **Description:**` to `<abandoned|postponed> (<reason>) — <question 5 answer or "none">`.
 - Append to `## Activity log`:
