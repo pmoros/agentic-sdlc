@@ -161,6 +161,25 @@ fi
 
 err ">> registered $SESSION_ID in $STATE"
 
+# --- upsert the portfolio work/wip.json entry ---------------------------
+# The session-start ↔ portfolio-wip linkage: a started session must have a
+# matching `in progress` item in the work tracker. If the id already exists
+# in work/backlog.json, move it to wip (preserving its groomed fields);
+# otherwise seed a fresh wip entry from the session's goal/ticket/scope/
+# task-type. Idempotent — never duplicates an existing id, never clobbers
+# other entries. Skipped only if the work/ tracker isn't present at all.
+WIP_JSON="$WORK_SESSIONS_REPO/work/wip.json"
+BACKLOG_JSON="$WORK_SESSIONS_REPO/work/backlog.json"
+if [[ -f "$WIP_JSON" ]]; then
+  SID_ENV="$SESSION_ID" GOAL_ENV="$GOAL" TICKET_ENV="$TICKET" \
+  SCOPE_ENV="$SCOPE" TASK_TYPE_ENV="$TASK_TYPE" BLOCKERS_ENV="$BLOCKERS" \
+  NOW_ENV="$NOW" WIP_JSON_ENV="$WIP_JSON" BACKLOG_JSON_ENV="$BACKLOG_JSON" \
+  python3 "$SCRIPT_DIR/lib/upsert_wip.py" || die "failed to upsert wip.json entry for $SESSION_ID"
+  err ">> registered $SESSION_ID in $WIP_JSON (status: in progress)"
+else
+  err ">> note: no work/wip.json in $WORK_SESSIONS_REPO — skipped wip registration"
+fi
+
 # --- always create the agentic-sdlc tool worktree -----------------------
 AGENTIC_WT="$SESSION_DIR/worktrees/agentic-sdlc"
 err ">> creating detached agentic-sdlc worktree (always included, kept in sync on resume)"

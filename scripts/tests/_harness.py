@@ -7,6 +7,7 @@ The bash scripts are exercised end-to-end against throwaway git repos built in
 a per-test temp dir — no AWS, no network, no touching the real repos or the
 user's real tmux sessions.
 """
+import json
 import os
 import shutil
 import subprocess
@@ -100,9 +101,13 @@ _SESSIONS_STATE = """# Sessions State
 """
 
 
-def make_work_sessions_repo(base):
+def make_work_sessions_repo(base, backlog=None, wip=None):
     """Minimal work-sessions git repo: session-template/ with the
-    files init-session.sh copies+rewrites, and a SESSIONS_STATE.md."""
+    files init-session.sh copies+rewrites, a SESSIONS_STATE.md, and a
+    work/ portfolio tracker (backlog.json + wip.json).
+
+    `backlog` / `wip` seed the corresponding tracker file (default: empty
+    `{}` placeholders, matching a fresh instance from the template)."""
     root = os.path.join(base, "work-sessions")
     tmpl = os.path.join(root, "session-template")
     os.makedirs(os.path.join(tmpl, "worktrees"))
@@ -118,6 +123,12 @@ def make_work_sessions_repo(base):
         fh.write("# Deployments\n")
     with open(os.path.join(root, "SESSIONS_STATE.md"), "w") as fh:
         fh.write(_SESSIONS_STATE)
+    work = os.path.join(root, "work")
+    os.makedirs(work)
+    with open(os.path.join(work, "backlog.json"), "w") as fh:
+        json.dump(backlog if backlog is not None else {}, fh, indent=2)
+    with open(os.path.join(work, "wip.json"), "w") as fh:
+        json.dump(wip if wip is not None else {}, fh, indent=2)
     git(["init", "-b", "main", "."], root)
     git(["add", "-A"], root)
     git(["commit", "-m", "scaffold"], root)

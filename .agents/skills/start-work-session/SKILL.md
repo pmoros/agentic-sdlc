@@ -110,10 +110,14 @@ The session folder name is the branch slug without the type prefix (e.g.
 Invoke `initialize_work_session_folder` with the gathered session ID, goal,
 ticket, scope, task type, and blockers. This creates
 `<work-sessions-repo>/sessions/<session-name>/` from the template, registers
-it in `SESSIONS_STATE.md`, and creates the mandatory
-`worktrees/agentic-sdlc` worktree — all autonomous, no separate approval
-needed (session file read/write and worktree add/remove are both autonomous
-per the Git Policy table in `AGENTS.md`).
+it in `SESSIONS_STATE.md`, **upserts the matching `in progress` item into the
+portfolio work tracker `work/wip.json`** (moving it from `work/backlog.json`
+if it was groomed there, otherwise seeding it from the session
+goal/ticket/scope/task-type — so starting a session never leaves the tracker
+empty for that id), and creates the mandatory `worktrees/agentic-sdlc`
+worktree — all autonomous, no separate approval needed (session file
+read/write and worktree add/remove are both autonomous per the Git Policy
+table in `AGENTS.md`).
 
 ### 5. Create a worktree per target repo
 
@@ -126,6 +130,8 @@ the user says otherwise).
 
 Tell the user:
 - Session folder: `<work-sessions-repo>/sessions/<session-name>/`
+- That the item is now in `work/wip.json` (status `in progress`) — the
+  portfolio tracker and the session are linked from the start
 - Agentic-sdlc tools worktree: `.../worktrees/agentic-sdlc` (detached, kept in sync by `resume_work_session`)
 - Each target repo's worktree path + branch
 - Repeat the doctrine compact block (repo north star + engineering defaults)

@@ -57,10 +57,31 @@ scripts/init-session.sh <session-id-slug> \
 
 This creates `<work-sessions-repo>/sessions/<session-id-slug>/` from
 `session-template/`, fills in `CONTEXT.md`, registers a row in
-`SESSIONS_STATE.md` (Status: `active`), creates the detached
-`worktrees/agentic-sdlc` worktree, and links a detached tmux session
-`cw-<session-id>` (guarded — skipped if tmux isn't installed) — all automatic,
-never gated on user input.
+`SESSIONS_STATE.md` (Status: `active`), **upserts the matching item in the
+portfolio work tracker `work/wip.json`** (status `in progress` — see below),
+creates the detached `worktrees/agentic-sdlc` worktree, and links a detached
+tmux session `cw-<session-id>` (guarded — skipped if tmux isn't installed) —
+all automatic, never gated on user input.
+
+**Portfolio wip registration (automatic).** Starting a session must never
+leave `work/wip.json` empty for that id — the script guarantees the
+session-start ↔ portfolio-wip linkage:
+- If `<session-id>` already exists in `work/backlog.json`, it is **moved** to
+  `work/wip.json` (its groomed fields — title, description, tickets, roadmap —
+  are preserved) and removed from the backlog.
+- Otherwise a **fresh** wip entry is seeded from the session's
+  goal/ticket/scope/task-type, following `work/template.json`'s shape.
+- Either way `status` is set to `in progress`, `current_state` is set (blocked
+  iff `--blockers` was given), and a `"session started"` entry is appended to
+  the append-only `history`.
+- The upsert is **idempotent** — an id already in `work/wip.json` is left
+  untouched (no duplicate history, no clobbered progress) and other entries are
+  never modified. It is skipped only if the target repo has no `work/` tracker
+  at all.
+
+Keep the three status views in agreement afterwards as work progresses:
+`work/wip.json` `status` ⇔ `CONTEXT.md` Current state (`Blocked`) ⇔
+`SESSIONS_STATE.md` `Status` (see `.agents/rules/session-state.instructions.md`).
 
 ### 5. Add the worktree to the VS Code workspace
 
@@ -84,6 +105,9 @@ Autonomous — no approval needed, this is part of worktree creation bookkeeping
 
 Tell the user:
 - The session folder path
+- That the item was registered in `work/wip.json` (status `in progress`) —
+  moved from `work/backlog.json` if it was groomed there, otherwise seeded from
+  the session goal/ticket/scope/task-type
 - That a session `.env` was written (defaults: `AWS_PROFILE=cw-test`,
   `AWS_DEFAULT_REGION=us-east-1`, `AWS_ALLOWED_PROFILES=cw-test,cw-partner`,
   `CLAUDE_CODE_DONT_INHERIT_ENV=true`) — loaded into the tmux env; edit it to

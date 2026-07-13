@@ -7,7 +7,8 @@ agent each time.
 | Path | Purpose | Backs |
 |---|---|---|
 | `create-worktree.sh` | Create/refresh/promote a git worktree of any repo under `repos/` (read-only-source policy, CoW node_modules) | `#create_work_tree`, `init-session.sh` |
-| `init-session.sh` | Scaffold a session folder in `work-sessions`, register it, create the agentic-sdlc tools worktree, wire up tmux | `#initialize_work_session_folder` |
+| `init-session.sh` | Scaffold a session folder in `work-sessions`, register it in `SESSIONS_STATE.md` **and the portfolio `work/wip.json` tracker** (via `lib/upsert_wip.py`), create the agentic-sdlc tools worktree, wire up tmux | `#initialize_work_session_folder` |
+| `lib/upsert_wip.py` | Pure wip-upsert logic — idempotently register a session id as an `in progress` item in `work/wip.json`, moving it from `work/backlog.json` if groomed there (per `work/template.json` shape) | `init-session.sh` |
 | `session-tmux.sh` | Guarded tmux lifecycle helper (`ensure` / `attach-hint` / `kill`); loads the session `.env` into the tmux env on `ensure` | init/resume/stop/end |
 | `aws-login.sh` | (Re)authenticate AWS SSO profiles — checks `sts get-caller-identity`, only runs `aws sso login` when expired, enforces the session `.env` allow-list | `#aws-reauth` |
 | `session-log.sh` | Append a consistent timestamped line to a session's `WORKLOG.md` / `CONTEXT.md` activity log | session-state rule + lifecycle commands |
@@ -44,7 +45,8 @@ pytest or the stdlib runner, and the whole suite runs from one command:
 |---|---|
 | `tests/test_session_tmux.py` | `session-tmux.sh` name + ensure/exists/attach-hint/kill lifecycle (real tmux, collision-proof id, always torn down; skipped if tmux absent) |
 | `tests/test_create_worktree.py` | `create-worktree.sh` detach/branch/refresh, dirty-source guard, arg validation — against throwaway bare+clone repos, no AWS/node |
-| `tests/test_init_session.py` | `init-session.sh` folder+CONTEXT+registry+worktree+tmux, against a minimal work-sessions repo + scratch agentic repo |
+| `tests/test_init_session.py` | `init-session.sh` folder+CONTEXT+registry+worktree+tmux **+ `work/wip.json` seeding / backlog→wip move / idempotency**, against a minimal work-sessions repo + scratch agentic repo |
+| `tests/test_upsert_wip.py` | `lib/upsert_wip.py` pure logic — fresh-seed, backlog→wip move, blocked state, idempotency, no-clobber (plain dicts, no I/O) |
 | `tests/test_session_log.py` | `session-log.sh` timestamped append to WORKLOG / CONTEXT, `--to` targeting, append-not-clobber, error paths |
 | `tests/test_aws_login.py` | `aws-login.sh` expired/valid-token paths, `--all`/`--list`, allow-list enforcement — against a stubbed `aws` CLI, no real AWS |
 | `tests/test_security_check.py` | `security-check.sh` secrets/shell/actions checks each catch a real planted issue and pass on clean fixtures — against throwaway repos, no touching this repo's own history |

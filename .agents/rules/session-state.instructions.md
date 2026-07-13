@@ -27,11 +27,33 @@ State lives in two places:
 | `WORKLOG.md` | Append-only log of lifetime events | Session started/paused/resumed/stopped/ended, PR opened, deployment run, major decision. Append via `scripts/session-log.sh`. |
 | `PLAN.md` | Strategy: goal, approach, milestones, risks | When the goal/approach/milestones/risks change — not per small step. |
 | `SPEC.md` | Tactical design: problem, design, interfaces/contracts, out-of-scope | When the design or a contract is defined or changes. Per design-first doctrine, fill it *before* implementing. |
-| `work/wip.json` (this item) | `status`, `current_state`, `work_items` (PR/links), append-only `history`, `roadmap` | As work progresses — flip `status`, refresh `current_state`, append a `history` entry per significant action, add PR/artifact links, update `roadmap`. |
+| `work/wip.json` (this item) | `status`, `current_state`, `work_items` (PR/links), append-only `history`, `roadmap` | **Seeded at session start** (see below), then as work progresses — flip `status`, refresh `current_state`, append a `history` entry per significant action, add PR/artifact links, update `roadmap`. |
 | `work/backlog.json` | Groomed items not yet picked up | When new work is discovered/groomed, or an item moves to WIP / done. |
 | `work/scratchpad.json` | Ad-hoc / ticketless exploration | When doing ticketless investigation that isn't a full session. |
 | `work/INBOX.md` | Raw unsorted capture | Immediately when something comes in ad-hoc — capture first, shape later. |
 | `work/WORK_STATE.md` | Snapshot: counts, stale, blocked, next actions | Regenerate whenever `backlog.json`/`wip.json` change materially, and at pause/stop/end. |
+
+## Session start ⇔ portfolio wip is mandatory and automated
+
+**Every started session has a matching `in progress` item in `work/wip.json`,
+keyed by the session id — no exceptions.** This linkage is not left to the
+agent to remember: `#initialize_work_session_folder` (via
+`scripts/init-session.sh`) **upserts** it automatically at session start:
+
+- If the id already exists in `work/backlog.json`, it is **moved** to
+  `work/wip.json` (groomed fields preserved) and removed from the backlog —
+  this is the automated form of the README's "move the item backlog→wip before
+  starting a session" step.
+- Otherwise a **fresh** wip entry is seeded from the session's
+  goal/ticket/scope/task-type, following `work/template.json`'s shape, with a
+  `"session started"` `history` entry.
+- The upsert is idempotent and never clobbers other entries.
+
+**Do not "start" a session by any path that skips this.** A started session
+must never leave `work/backlog.json` / `work/wip.json` as empty `{}`
+placeholders for that id. If you ever find a live session with no `work/wip.json`
+entry (e.g. one created before this was automated), reconcile it immediately by
+adding the entry — the session is not correctly tracked until you do.
 
 ## Update discipline
 

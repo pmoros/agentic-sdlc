@@ -5,6 +5,7 @@ is exercised when tmux is present and always torn down.
 
 Runs under pytest or `python -m unittest discover -s scripts/tests`.
 """
+import json
 import os
 import sys
 import subprocess
@@ -41,6 +42,10 @@ class InitSession(TempRepoCase):
             *extra,
         ], check=False)
 
+    def read_json(self, name):
+        with open(os.path.join(self.ws, "work", name)) as fh:
+            return json.load(fh)
+
     def test_creates_folder_registry_worktree_and_tmux(self):
         r = self.init()
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -74,6 +79,68 @@ class InitSession(TempRepoCase):
             self.assertEqual(
                 subprocess.run(["tmux", "has-session", "-t", f"={TMUX_NAME}"],
                                capture_output=True).returncode, 0)
+
+    def test_seeds_wip_entry_when_backlog_empty(self):
+        self.assertEqual(self.init().returncode, 0)
+
+        wip = self.read_json("wip.json")
+        self.assertIn(SID, wip)                                        # keyed by session id
+        item = wip[SID]
+        self.assertEqual(item["status"], "in progress")               # picked up for active work
+        self.assertIn("Self-test of init-session", item["title"])     # seeded from goal
+        self.assertFalse(item["current_state"]["is_blocked"])         # not blocked by default
+        # ticket carried across from the session's --ticket
+        self.assertIn("https://example.test/browse/ADH-1", json.dumps(item["tickets"]))
+        # append-only history has a "session started" entry
+        self.assertTrue(any("session started" in h.get("action", "").lower()
+                            for h in item["history"]), item["history"])
+
+        # backlog untouched, no stray placeholder key
+        self.assertEqual(self.read_json("backlog.json"), {})
+
+    def test_moves_backlog_item_to_wip(self):
+        backlog_item = {
+            "title": "Groomed backlog title",
+            "description": "already-shaped item",
+            "status": "ready",
+            "tickets": {"main-bug-tracking": "https://example.test/browse/ADH-1"},
+            "roadmap": [{"step": "do the thing", "owner": "me"}],
+        }
+        self.ws = make_work_sessions_repo(
+            self.tmp + "-bl", backlog={SID: backlog_item})
+        self.assertEqual(self.init().returncode, 0)
+
+        wip = self.read_json("wip.json")
+        self.assertIn(SID, wip)
+        self.assertEqual(wip[SID]["status"], "in progress")           # flipped to in progress
+        self.assertEqual(wip[SID]["title"], "Groomed backlog title")  # groomed fields preserved
+        self.assertEqual(wip[SID]["roadmap"], backlog_item["roadmap"])
+        self.assertTrue(any("session started" in h.get("action", "").lower()
+                            for h in wip[SID]["history"]))
+
+        # item removed from backlog once moved to wip
+        self.assertNotIn(SID, self.read_json("backlog.json"))
+
+    def test_wip_upsert_is_idempotent_and_preserves_others(self):
+        # a pre-existing, unrelated wip entry must survive untouched
+        other = {"title": "someone else's work", "status": "in progress"}
+        self.ws = make_work_sessions_repo(
+            self.tmp + "-wip", wip={"OTHER-1": other})
+        self.assertEqual(self.init().returncode, 0)
+
+        wip = self.read_json("wip.json")
+        self.assertEqual(wip["OTHER-1"], other)                       # untouched
+        self.assertIn(SID, wip)
+        first_history_len = len(wip[SID]["history"])
+
+        # re-running for the same id must be rejected (dup session) and must
+        # not duplicate or clobber the wip entry.
+        r = self.init()
+        self.assertNotEqual(r.returncode, 0)
+        wip2 = self.read_json("wip.json")
+        self.assertEqual(len([k for k in wip2 if k == SID]), 1)
+        self.assertEqual(len(wip2[SID]["history"]), first_history_len)
+        self.assertEqual(wip2["OTHER-1"], other)
 
     def test_requires_goal(self):
         r = run([SCRIPT, "ADH-x", "--work-sessions-repo", self.ws,
