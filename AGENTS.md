@@ -22,6 +22,7 @@ They are the source of truth for project schemas, custom fields, allowed values,
 | Engineering doctrine (TDD/BDD/design-first/KIS) | `.agents/rules/engineering.instructions.md` |
 | Production deployments (risk/pre-flight/rollback) | `.agents/rules/deployments.instructions.md` |
 | Session state maintenance (keep tracking files live) | `.agents/rules/session-state.instructions.md` |
+| Development lifecycle (staged pipeline + Gate A/B) | `.agents/rules/dev-lifecycle.instructions.md` |
 
 The Atlassian and AWS rule files ship as **templates** with placeholder
 projects/values — fill in your org's actual projects, fields, and
@@ -38,6 +39,7 @@ different cloud provider, a different ticketing system).
 @.agents/rules/engineering.instructions.md
 @.agents/rules/deployments.instructions.md
 @.agents/rules/session-state.instructions.md
+@.agents/rules/dev-lifecycle.instructions.md
 
 ### Jira Execution Rule In This Manager Repo
 
@@ -203,6 +205,7 @@ Specialist subagent definitions, canonical under `.agents/agents/<name>.md` and 
 | Agent | Purpose |
 |---|---|
 | `project-manager` | SDLC manager for the sibling `work-sessions` repo — intake, triage, grooming, backlog/WIP health, bottleneck/blocker detection, planning, and retros. Manages the flow of work, not the implementation; delegates to the `#triage-inbox` / `#groom-item` / `#review-backlog` / `#review-wip` / `#plan-cycle` / `#run-retro` commands. |
+| `reviewer` | Fresh-context critic for **Gate A (design review)** and **QA** in the development lifecycle (`.agents/rules/dev-lifecycle.instructions.md`). Produces an argued, cited critique organized by architectural characteristics / functional requirements / best practices — never a bare pass/fail. Reviews work it did not author and hands a verdict + findings to the human gate; it never merges, pushes, or approves its own review. |
 
 ### Auto-discovered skills (`.agents/skills/`)
 

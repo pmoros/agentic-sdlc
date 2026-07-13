@@ -1,0 +1,1 @@
+../../.agents/rules/dev-lifecycle.instructions.md
