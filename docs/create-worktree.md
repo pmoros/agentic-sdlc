@@ -168,7 +168,7 @@ safely.
   other linked worktree. **Promote it first:**
 
   ```bash
-  scripts/create-worktree.sh --promote <work-sessions-repo>/sessions/<session>/worktrees/code-<branch>
+  <agentic-sdlc-repo>/scripts/create-worktree.sh --promote <work-sessions-repo>/sessions/<session>/worktrees/code-<branch>
   ```
 
   Promotion breaks the symlink, gives the worktree its own isolated
