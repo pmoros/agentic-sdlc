@@ -1,0 +1,68 @@
+# LiteLLM gateway — the $200/month HARD CAP for the autonomous-workflows system.
+# Minimal Anthropic-direct setup (no AWS needed). Bedrock lanes are commented until
+# AWS creds are added — see ../../../../bedrock-model-evaluation.md for the full hybrid.
+#
+# Verify LiteLLM field names against the current LiteLLM docs before first launch
+# (LiteLLM evolves); the $200 cap keys — litellm_settings.max_budget + budget_duration
+# — are stable, documented features.
+
+model_list:
+  - model_name: planner
+    litellm_params:
+      model: anthropic/claude-opus-4-8
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: coder
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: classifier
+    litellm_params:
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ---- Passthrough for vanilla Claude Code workers ----
+  # `claude -p` sends the ACTUAL model IDs it uses (e.g. claude-sonnet-*, claude-haiku-*),
+  # not the role names above. This wildcard routes any requested Anthropic model through to
+  # Anthropic-direct so a headless worker works via ANTHROPIC_BASE_URL. The $200 GLOBAL cap
+  # still applies (it is global, independent of model_name). The role names above stay for a
+  # future custom orchestrator that calls the gateway with model="coder"/"planner"/etc.
+  - model_name: "*"
+    litellm_params:
+      model: anthropic/*
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ---- Non-Anthropic Bedrock lanes (enable later, once AWS creds are in .env) ----
+  # Nova Lite = cheap AND cacheable on Bedrock -> best classifier offload.
+  # - model_name: classifier-nova
+  #   litellm_params:
+  #     model: bedrock/amazon.nova-lite-v1:0
+  #     aws_region_name: us-east-1
+  # DeepSeek/Qwen coder = OFFLOAD ONLY (no Bedrock prompt caching; ~18pt SWE-bench gap).
+  # - model_name: coder-bedrock
+  #   litellm_params:
+  #     model: bedrock/deepseek.v3.2         # confirm exact -v1:0 suffix in AWS console
+  #     aws_region_name: us-west-2
+
+router_settings:
+  routing_strategy: simple-shuffle     # single instance -> no Redis needed
+  num_retries: 2
+  timeout: 600
+  # fallbacks (enable when the Bedrock lanes above are on):
+  # fallbacks:
+  #   - { "coder": ["coder-bedrock"] }
+  #   - { "classifier": ["classifier-nova"] }
+  #   # planner has NO fallback on purpose — fail loud, never degrade planning/review.
+
+litellm_settings:
+  # ================= THE HARD CAP =================
+  # Global monthly ceiling across ALL keys. When exceeded, the gateway refuses every
+  # request. Persisted in Postgres so a restart does NOT reset the month's spend.
+  max_budget: 200
+  budget_duration: "1mo"
+  drop_params: true
+  # LiteLLM's own response cache is useless for agentic coding — leave it off and rely
+  # on provider (Anthropic/Nova) prompt caching, which passes through.
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL

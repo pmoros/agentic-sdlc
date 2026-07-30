@@ -1,0 +1,44 @@
+# Minimal LiteLLM gateway that enforces the $200/month hard cap on macOS + Docker.
+# Postgres persists spend so the monthly budget SURVIVES restarts (no surprises:
+# a container restart must not reset the month's spend counter to zero).
+#
+# Launch:  cp .env.example .env  &&  <edit .env>  &&  docker compose up -d
+# Pin the LiteLLM image to a specific version for anything beyond local testing.
+
+services:
+  litellm-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - litellm-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  litellm:
+    image: ghcr.io/berriai/litellm-database:main-stable   # verify/pin the tag before prod
+    restart: unless-stopped
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      DATABASE_URL: postgresql://litellm:${POSTGRES_PASSWORD}@litellm-db:5432/litellm
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # AWS creds only needed once the Bedrock lanes in litellm-config.yaml are enabled:
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+
+volumes:
+  litellm-pgdata:
