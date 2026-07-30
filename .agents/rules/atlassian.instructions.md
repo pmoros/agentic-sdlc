@@ -103,7 +103,7 @@ parameters and retry.
 ### Tool discovery rule
 
 Do not choose Atlassian tools by MCP server name alone — the server name in
-`.vscode/mcp.json` does not guarantee the exact runtime tool names exposed to
+`.mcp.json` does not guarantee the exact runtime tool names exposed to
 the agent. When loading Atlassian tools, search by the operation you need
 (read issue, create issue, search, comment, transition), not by an assumed
 namespace prefix. Use the exact tool name returned by tool discovery.

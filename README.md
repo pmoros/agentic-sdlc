@@ -46,9 +46,10 @@ everything so it survives across machines and time.
    replace them with your org's actual Jira projects, custom fields, AWS
    profile conventions, etc. Run `#configure-integrations.prompt.md` for a
    guided pass, or edit the files directly.
-3. **Set up local MCP config** (optional, for Jira/Confluence/AWS/GitHub tool
-   access): `cp .vscode/mcp.example.json .vscode/mcp.json`, then restart your
-   editor — see `AGENTS.md` → MCP Setup.
+3. **Review MCP config.** `.mcp.json` at the repo root is committed and
+   auto-detected by Claude Code — approve its servers on first session start.
+   Add any server needing a token (e.g. Jira/Confluence, GitHub) via
+   `${VAR}` env references, never hardcoded — see `AGENTS.md` → MCP Setup.
 4. **Start a session:** invoke the `start-work-session` skill (or `#start_work_session`)
    from your agent. It creates a session folder in `work-sessions`, registers
    it, and sets up worktrees for this repo plus any target repos.

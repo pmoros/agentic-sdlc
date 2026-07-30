@@ -6,10 +6,12 @@ sessions/
 .claude/settings.local.json
 
 # ─── VS Code ─────────────────────────────────────────────────────────────────
+# MCP config lives at the repo root in .mcp.json (Claude Code's format, committed).
+# If a VS Code/Copilot user needs it, symlink .vscode/mcp.json -> ../.mcp.json —
+# note VS Code expects a top-level "servers" key while this file uses "mcpServers",
+# so the symlink only works as-is if VS Code's MCP client accepts that key, or the
+# symlinked content is adapted.
 .vscode/*
-!.vscode/mcp.example.json
-# mcp.json is gitignored — copy from mcp.example.json and fill in credentials
-.vscode/mcp.json
 # Workspace files may contain local absolute paths — gitignore them or commit
 # a sanitised version explicitly.
 *.code-workspace

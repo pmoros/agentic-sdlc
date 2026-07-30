@@ -63,9 +63,21 @@ Treat environment-selecting inputs (e.g. `AWS_PROFILE`, an environment ID, a bra
 
 ## MCP Setup
 
-Tools for Jira, Confluence, AWS, and GitHub are configured via `.vscode/mcp.json` (gitignored).
+MCP servers are configured in one place: `.mcp.json` at the repo root (committed, project-scoped, Claude Code's native format). Auto-detected on session start in this repo; Claude Code prompts once to approve the project's servers.
 
-On first use: `cp .vscode/mcp.example.json .vscode/mcp.json`, then restart VS Code — it will prompt for credentials and store them in the system keychain.
+Current servers:
+
+| Server | Purpose | Auth |
+|---|---|---|
+| `fetch-complex` | General web fetch | None |
+| `aws-docs` | AWS documentation lookups | None |
+| `aws-knowledge` | AWS's hosted remote MCP — broader docs/API refs/Well-Architected guidance | None |
+| `playwright` | Browser automation, e.g. verifying deployed consoles/dashboards | None |
+| `newrelic` | New Relic observability platform (NRQL, alerts, entities) | `NEW_RELIC_API_KEY` env var (`NRAK-...` user API key from New Relic → user menu → API keys) — referenced via `${NEW_RELIC_API_KEY}`, never hardcoded, since this file is committed |
+
+For a server that needs a token (like `newrelic`), export the var in your shell before starting Claude Code — never write the literal secret into `.mcp.json`, since it's shared with the team. For a server with a full OAuth flow, Claude Code handles that itself on first use; no manual credential prompting needed.
+
+VS Code/Copilot is not currently configured — there's no `.vscode/mcp.json` in this repo. If a contributor needs MCP tools in VS Code, they can symlink `.vscode/mcp.json` to the root `.mcp.json`, but note the formats aren't identical: VS Code expects a top-level `servers` key (plus its own `inputs` credential-prompt feature), while this file uses Claude Code's `mcpServers` key with `${VAR}` shell-env expansion. A raw symlink won't be picked up correctly by VS Code as-is — the content would need adapting, not just re-pointing.
 
 ---
 
@@ -119,54 +131,27 @@ The following entries must be present in the repo's `.gitignore`:
 ```
 .copilot-doctrine.md
 .agents/rules/*.local.*
-.vscode/mcp.json
 ```
 
-## Local MCP Setup (per contributor)
-
-`.vscode/mcp.json` is **gitignored** — each contributor must create their own local copy before MCP-dependent features (Jira, Confluence, AWS) will work.
-
-### First-time setup
-
-1. Copy the example file:
-   ```
-   cp .vscode/mcp.example.json .vscode/mcp.json
-   ```
-2. Restart VS Code — it will **prompt you for credentials** on first use and store secrets in the system keychain.
-
-The file uses VS Code's `inputs` feature — no secrets are ever hardcoded or written to disk.
-
-VS Code will prompt for the following on first use:
-
-| Input | What to provide |
-|---|---|
-| Atlassian Jira URL | e.g. `https://yourcompany.atlassian.net` |
-| Atlassian Confluence URL | e.g. `https://yourcompany.atlassian.net/wiki` |
-| Atlassian account email | Your Atlassian login email |
-| Atlassian API token | A **classic** API token from [id.atlassian.com/manage-profile/security/api-tokens](https://id.atlassian.com/manage-profile/security/api-tokens) |
-| AWS profile | Your AWS CLI profile name (e.g. your SSO profile) |
-| AWS region | e.g. `us-east-1` |
-
-### Agent diagnostics — run this check at the start of any session
+## Agent diagnostics — MCP — run this check at the start of any session
 
 If any MCP-backed operation fails or the user reports MCP tools are unavailable:
 
-1. **Check for `mcp.json`**:
+1. **Check for `.mcp.json`**:
    ```
-   test -f .vscode/mcp.json && echo "EXISTS" || echo "MISSING"
+   test -f .mcp.json && echo "EXISTS" || echo "MISSING"
    ```
-   If `MISSING`, tell the user:
-   > "`mcp.json` is missing from `.vscode/`. Copy it from the example: `cp .vscode/mcp.example.json .vscode/mcp.json`, then restart VS Code — it will prompt for credentials on first use."
+   If `MISSING`, tell the user the file should exist at the repo root — see § MCP Setup above.
 
-2. **Check `uvx` is on PATH**:
+2. **Check `uvx` and `npx` are on PATH** (used by the stdio servers):
    ```
-   which uvx || echo "uvx not found"
+   which uvx npx || echo "one or both not found"
    ```
-   If missing: direct the user to install `uv` — `curl -Ls https://astral.sh/uv/install.sh | sh` (macOS/Linux) or `winget install astral-sh.uv` (Windows). `uvx` is bundled with `uv`.
+   If `uvx` is missing: direct the user to install `uv` — `curl -Ls https://astral.sh/uv/install.sh | sh` (macOS/Linux) or `winget install astral-sh.uv` (Windows).
 
-3. **Never hardcode absolute paths** in `mcp.json`. Always use plain `uvx` (not `/Users/<name>/.local/bin/uvx`) so the config is portable.
+3. **Never hardcode absolute paths** in `.mcp.json`. Use plain `uvx`/`npx` (not an absolute path) so the config is portable.
 
-4. **Never hardcode credentials** in `mcp.json`. Always use `${input:...}` references so secrets are managed by VS Code, not stored in plain text.
+4. **Never hardcode credentials** in `.mcp.json`. Always use `${VAR}` references and export the value in the contributor's shell — this file is committed and shared with the team.
 
 ## Skills Reference
 
