@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "fetch-complex": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "aws-docs": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "aws-knowledge": {
+      "type": "http",
+      "url": "https://knowledge-mcp.global.api.aws"
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "newrelic": {
+      "type": "http",
+      "url": "https://mcp.newrelic.com/mcp/",
+      "headers": {
+        "Api-Key": "${NEW_RELIC_API_KEY}"
+      }
+    }
+  }
+}
