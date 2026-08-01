@@ -41,7 +41,8 @@ your shell can never silently flip a worker back to paid billing.
 | `fanout.py` | dep-aware bounded-concurrency scheduler + run manifest + teardown plan |
 | `integrate.py` | real N-branch merge onto an integration branch + merged-tree QA |
 | `metrics.py` | aggregate run-records → cost/quality/safety numbers + phase go/no-go gates |
-| `run-worker.sh` | the launcher: lane seam, env scrub, full `stream-json` trace capture |
+| `run-worker.sh` | single-worker launcher: lane seam, env scrub, full `stream-json` trace capture |
+| `fanout_run.py` | **turnkey end-to-end fan-out driver** — ties the cores into one run (`execute_fanout` + CLI) |
 | `gateway/` | LiteLLM $200/mo hard-cap config (api lane only) — see `gateway/README.md` |
 
 ## Quickstart
@@ -56,6 +57,11 @@ LANE=subscription ROLE=coder WORKER_TOOLS="Read,Edit" \
 
 # api lane — start the gateway first (see gateway/README.md)
 LANE=api BUDGET=5 autonomous-workflows/run-worker.sh t1 "…"
+
+# a whole fan-out in one command (N workers -> admit -> launch -> join -> merge -> metrics)
+python3 autonomous-workflows/fanout_run.py subtasks.json \
+  --session-id S1 --worktrees-dir .wt --run-records-dir .rr --gate-phase subscription-pivot
+# subtasks.json: [{"task_id":"t1","role":"coder","goal":"…"}, {"task_id":"t2", …}]
 ```
 
 Env knobs: `LANE` (subscription|api), `ROLE` (planner|coder|classifier or a task type),
@@ -68,10 +74,13 @@ Env knobs: `LANE` (subscription|api), `ROLE` (planner|coder|classifier or a task
 decompose → plan_runs → admit → schedule/launch → supervise → join → teardown → metrics
 ```
 
-Admission uses `orchestrator.fanout_windows_ok` (subscription) or `fanout_budget_ok`
-(api); the join uses `join_input` (guarded pause recognition) + `join_decision`
-(precedence `halt_violation > partial_review > waiting_rate_limit > needs_human_merge >
-ready_for_final_review`); metrics via `metrics.aggregate` + `evaluate_gates(phase)`.
+`fanout_run.execute_fanout` runs this whole pipeline; the two side-effecting steps
+(`launch` a worker, `merge` real git) are injected so the orchestration is unit-tested
+with fakes. Admission uses `orchestrator.fanout_windows_ok` (subscription) or
+`fanout_budget_ok` (api); the join uses `join_input` (guarded pause recognition) +
+`join_decision` (precedence `halt_violation > partial_review > waiting_rate_limit >
+needs_human_merge > ready_for_final_review`); a real merge conflict downgrades a `ready`
+verdict to `needs_human_merge`; metrics via `metrics.aggregate` + `evaluate_gates(phase)`.
 
 ## Tests
 
