@@ -74,8 +74,9 @@ Current servers:
 | `aws-knowledge` | AWS's hosted remote MCP — broader docs/API refs/Well-Architected guidance | None |
 | `playwright` | Browser automation, e.g. verifying deployed consoles/dashboards | None |
 | `newrelic` | New Relic observability platform (NRQL, alerts, entities) | `NEW_RELIC_API_KEY` env var (`NRAK-...` user API key from New Relic → user menu → API keys) — referenced via `${NEW_RELIC_API_KEY}`, never hardcoded, since this file is committed |
+| `atlassian` | Atlassian's official **remote** MCP server — Jira **and** Confluence (issues, JQL search, create/edit/transition, comments, Confluence pages) in one server | OAuth 2.1 — Claude Code opens the browser consent flow on first use and caches the token per-user. No secret in `.mcp.json`; nothing to export. Requires an Atlassian Cloud account with access to the target site |
 
-For a server that needs a token (like `newrelic`), export the var in your shell before starting Claude Code — never write the literal secret into `.mcp.json`, since it's shared with the team. For a server with a full OAuth flow, Claude Code handles that itself on first use; no manual credential prompting needed.
+For a server that needs a token (like `newrelic`), export the var in your shell before starting Claude Code — never write the literal secret into `.mcp.json`, since it's shared with the team. For a server with a full OAuth flow (like `atlassian`), Claude Code handles that itself on first use; no manual credential prompting needed.
 
 VS Code/Copilot is not currently configured — there's no `.vscode/mcp.json` in this repo. If a contributor needs MCP tools in VS Code, they can symlink `.vscode/mcp.json` to the root `.mcp.json`, but note the formats aren't identical: VS Code expects a top-level `servers` key (plus its own `inputs` credential-prompt feature), while this file uses Claude Code's `mcpServers` key with `${VAR}` shell-env expansion. A raw symlink won't be picked up correctly by VS Code as-is — the content would need adapting, not just re-pointing.
 
