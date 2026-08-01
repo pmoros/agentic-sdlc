@@ -14,11 +14,15 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import window_guard
+
 # USD per 1M tokens. Cache reads bill at 0.1x input; cache writes at 1.25x input
 # (5-minute TTL). Bedrock non-Anthropic prices are added once the Bedrock
 # evaluation lands (see ../bedrock-model-evaluation.md).
 PRICES = {
-    "claude-opus-4-8": {"input": 5.00, "output": 25.00},
+    "claude-fable-5": {"input": 10.00, "output": 50.00},   # ADH-005: hardest-reasoning tier
+    "claude-opus-5": {"input": 5.00, "output": 25.00},     # ADH-005: current Opus (planner)
+    "claude-opus-4-8": {"input": 5.00, "output": 25.00},   # legacy Opus (still a valid override)
     "claude-sonnet-5": {"input": 3.00, "output": 15.00},
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
 }
@@ -82,7 +86,7 @@ def _effective_cost(rec: dict) -> float:
     return compute_cost(rec.get("tokens", {}), rec["model"])
 
 
-def aggregate(records: list[dict]) -> dict:
+def aggregate(records: list[dict], *, now: str | None = None, allotments: dict | None = None) -> dict:
     """Aggregate run-records into the SPEC metric values.
 
     Rate denominators use terminal records only — `paused_rate_limit` is
@@ -166,6 +170,9 @@ def aggregate(records: list[dict]) -> dict:
         "change_request_rate": (change_requested / completed) if completed else 0.0,
         "guardrail_violations_total": sum(r.get("guardrail_violations", 0) or 0 for r in records),
         "mean_time_to_first_diff_s": (sum(diffs) / len(diffs)) if diffs else 0.0,
+        # ADH-005: advisory per-family window headroom (present only when `now` given).
+        "window_headroom": (window_guard.window_headroom(records, None, now, allotments)
+                            if now is not None else None),
     }
 
 

@@ -250,5 +250,27 @@ class SubscriptionPivotGateTest(unittest.TestCase):
         self.assertFalse(g["passed"])
 
 
+class ModelRosterAndHeadroomTest(unittest.TestCase):
+    # ADH-005: new roster prices + per-family window headroom in aggregate.
+    def test_prices_include_opus5_and_fable5(self):
+        self.assertEqual(metrics.PRICES["claude-opus-5"], {"input": 5.00, "output": 25.00})
+        self.assertEqual(metrics.PRICES["claude-fable-5"], {"input": 10.00, "output": 50.00})
+        self.assertGreater(metrics.compute_cost({"input": 1000, "output": 100}, "claude-fable-5"), 0)
+
+    def test_window_headroom_block_present_with_now(self):
+        recs = [{"cost_usd": 24.5, "started_at": "2026-07-26T12:00:00+00:00",
+                 "model": "claude-sonnet-5", "lane": "subscription", "cost_basis": "estimated",
+                 "outcome": "review_ready", "tokens": {"input": 1}}]
+        m = metrics.aggregate(recs, now="2026-08-01T12:00:00+00:00")
+        self.assertIn("window_headroom", m)
+        self.assertTrue(m["window_headroom"]["sonnet"]["tight"])
+        self.assertFalse(m["window_headroom"]["opus"]["tight"])
+
+    def test_window_headroom_none_without_now(self):
+        m = metrics.aggregate([{"model": "claude-sonnet-5", "tokens": {"input": 1},
+                                "outcome": "review_ready", "cost_usd": 0.01}])
+        self.assertIsNone(m["window_headroom"])
+
+
 if __name__ == "__main__":
     unittest.main()
