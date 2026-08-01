@@ -20,9 +20,22 @@ WINDOW_7D = 7 * 24 * 3600
 
 # Self-imposed worker share of the account's shared windows (D3.1/D4);
 # estimated-USD proxy units, env-overridable at the run-worker layer.
-DEFAULT_ALLOTMENTS = {"5h": 5.0, "7d": 40.0, "7d_sonnet": 25.0}
+DEFAULT_ALLOTMENTS = {"5h": 5.0, "7d": 40.0, "7d_sonnet": 25.0, "7d_fable": 20.0}
 
-_FAMILIES = ("opus", "sonnet", "haiku")
+# Below this remaining est-USD, a family's window is "tight" (ADH-005 D5). Env-tunable.
+HEADROOM_TIGHT_MARGIN = 1.0
+
+# Windows each family is metered against (ADH-005 §2): everyone shares 5h + 7d(all);
+# Sonnet also has its own weekly cap; Fable is ceilinged at <=50% weekly. Opus/Haiku
+# have no own weekly cap (assumed pending /usage) -> only the shared windows apply.
+_FAMILY_WINDOWS = {
+    "opus":   (("5h", WINDOW_5H, None), ("7d", WINDOW_7D, None)),
+    "haiku":  (("5h", WINDOW_5H, None), ("7d", WINDOW_7D, None)),
+    "sonnet": (("5h", WINDOW_5H, None), ("7d", WINDOW_7D, None), ("7d_sonnet", WINDOW_7D, "sonnet")),
+    "fable":  (("5h", WINDOW_5H, None), ("7d", WINDOW_7D, None), ("7d_fable", WINDOW_7D, "fable")),
+}
+
+_FAMILIES = ("opus", "sonnet", "haiku", "fable")
 
 # Strict, documented limit strings only (D3.2) — loose paraphrases must not
 # match, or a task merely quoting the concept could pause the fleet.
@@ -147,6 +160,7 @@ def can_start(records, manifest, now, allotments=None):
         (WINDOW_5H, None, allot["5h"]),
         (WINDOW_7D, None, allot["7d"]),
         (WINDOW_7D, "sonnet", allot["7d_sonnet"]),
+        (WINDOW_7D, "fable", allot["7d_fable"]),
     )
     for window_s, fam, cap in checks:
         burn = (window_burn(records, now, window_s, tier=fam)
@@ -154,6 +168,25 @@ def can_start(records, manifest, now, allotments=None):
         if burn > cap:
             return False
     return True
+
+
+def window_headroom(records, manifest, now, allotments=None, margin=HEADROOM_TIGHT_MARGIN):
+    """Per-family remaining est-USD headroom (ADH-005 D5): for each family, the MIN
+    over its applicable windows of `allot[window] - (completed_burn + committed_burn)`.
+    Opus/Haiku see only the shared 5h + 7d(all), so a binding shared cap drives their
+    headroom down too — this is what lets the router gate a Sonnet->Opus upgrade on
+    Opus's *own* number. Returns {family: {"headroom": float, "tight": bool}}."""
+    allot = dict(DEFAULT_ALLOTMENTS)
+    allot.update(allotments or {})
+    out = {}
+    for fam, windows in _FAMILY_WINDOWS.items():
+        headroom = min(
+            allot[key] - (window_burn(records, now, window_s, tier=filt)
+                          + committed_burn(manifest, tier=filt))
+            for (key, window_s, filt) in windows
+        )
+        out[fam] = {"headroom": headroom, "tight": headroom < margin}
+    return out
 
 
 def next_resume_at(records, now):

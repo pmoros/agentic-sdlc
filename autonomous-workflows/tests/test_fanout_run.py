@@ -147,5 +147,21 @@ class ExecuteFanoutTest(unittest.TestCase):
         self.assertEqual(res["decision"], "ready_for_final_review")
 
 
+class FanoutWindowRoutingTest(unittest.TestCase):
+    # ADH-005: execute_fanout forwards records/now so window-aware routing is live.
+    def test_execute_fanout_reroutes_sonnet_to_opus_under_pressure(self):
+        captured = {}
+        def launch(spec):
+            captured[spec["task_id"]] = spec["model"]
+            return rec(spec["task_id"], model=spec["model"])
+        records = [{"cost_usd": 24.5, "started_at": "2026-07-26T12:00:00+00:00",
+                    "model": "claude-sonnet-5", "lane": "subscription", "cost_basis": "estimated"}]
+        res = fanout_run.execute_fanout(
+            [{"task_id": "t1", "task_type": "fix"}], "S", launch=launch, merge=clean_merge,
+            now="2026-08-01T12:00:00+00:00", records=records)
+        self.assertTrue(res["admitted"])
+        self.assertEqual(captured["t1"], "claude-opus-5")
+
+
 if __name__ == "__main__":
     unittest.main()

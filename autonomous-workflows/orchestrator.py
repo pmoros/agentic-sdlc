@@ -9,13 +9,16 @@ no git — the parallel launch + real git merge are a thin shell around this
 from __future__ import annotations
 
 import budget
+import model_router
 import policy
 import routing
 import window_guard
 
 
 def plan_runs(subtasks: list[dict], session_id: str, per_worker_budget: float = 3.0,
-              lane: str = "subscription", per_worker_window_est_usd: float = 1.0) -> list[dict]:
+              lane: str = "subscription", per_worker_window_est_usd: float = 1.0,
+              *, records: list[dict] | None = None, manifest: dict | None = None,
+              now: str | None = None, allotments: dict | None = None) -> list[dict]:
     """One run spec per sub-task: role->model (routing), own agent id, branch, and
     the lane-appropriate guard field.
 
@@ -27,7 +30,15 @@ def plan_runs(subtasks: list[dict], session_id: str, per_worker_budget: float = 
     `window_est_usd` (fed to `fanout_windows_ok` / the manifest's tier-aware
     committed burn) and **no** `budget` key; api specs keep `budget` (the
     `fanout_budget_ok` contract `float(s["budget"])`) and no window field.
+
+    Window-aware routing (ADH-005 D4/D6): on the **subscription** lane, when the
+    caller supplies the window ledger (`records`/`now`), each spec's strength-map
+    model is passed through `model_router.choose_model` against the live per-family
+    headroom — upgrading Sonnet->Opus under pressure or deferring, never
+    downgrading. Without those inputs (or on the api lane) the strength map stands.
     """
+    window = (window_guard.window_headroom(records or [], manifest, now, allotments)
+              if lane == "subscription" and now is not None else None)
     specs = []
     for st in subtasks:
         tid = st["task_id"]
@@ -41,10 +52,16 @@ def plan_runs(subtasks: list[dict], session_id: str, per_worker_budget: float = 
             "agent_id": f"agent-{session_id}-{tid}",
             "role": role,
             "model": model,
+            "task_type": task_type,
             "branch": f"auto/{session_id}/{tid}",
             "lane": lane,
             "goal": st.get("goal"),
         }
+        if window is not None:
+            decision = model_router.choose_model(spec, window, allotments=allotments)
+            spec["model"] = decision["model"]
+            spec["route_reason"] = decision["reason"]
+            spec["route_action"] = decision["action"]
         if lane == "api":
             spec["budget"] = per_worker_budget
         else:

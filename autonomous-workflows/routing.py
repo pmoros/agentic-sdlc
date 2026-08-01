@@ -11,15 +11,18 @@ CLI (used by run-worker.sh to resolve ANTHROPIC_MODEL):
 from __future__ import annotations
 
 ROLE_MODEL = {
-    "planner": "claude-opus-4-8",     # hard reasoning / decomposition / final review
+    "architect": "claude-fable-5",    # hardest reasoning / long-horizon (escalation-only; ADH-005)
+    "planner": "claude-opus-5",       # planning / design / review / decomposition (current Opus)
     "coder": "claude-sonnet-5",       # bulk read-edit-test (near-Opus coding, ~40% cheaper)
     "classifier": "claude-haiku-4-5", # triage / routing / cheap subagents
 }
 
 TASK_TYPE_ROLE = {
+    # hardest reasoning -> architect (Fable; escalation-only, ADH-005 D3)
+    "architect": "architect", "hard-debug": "architect", "deep-research": "architect",
     # reasoning-heavy -> planner (Opus)
     "plan": "planner", "planning": "planner", "design": "planner",
-    "architect": "planner", "review": "planner", "research": "planner",
+    "review": "planner", "research": "planner",
     "spike": "planner", "analyze": "planner", "analysis": "planner",
     "discovery": "planner", "design-review": "planner",
     # implementation -> coder (Sonnet)

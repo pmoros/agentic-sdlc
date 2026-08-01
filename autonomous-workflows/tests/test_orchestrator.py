@@ -34,7 +34,7 @@ class PlanRunsTest(unittest.TestCase):
 
     def test_role_and_task_type_resolve_to_the_right_model(self):
         by_id = {s["task_id"]: s for s in self.specs}
-        self.assertEqual(by_id["t1"]["model"], "claude-opus-4-8")   # planner
+        self.assertEqual(by_id["t1"]["model"], "claude-opus-5")     # planner (ADH-005)
         self.assertEqual(by_id["t2"]["model"], "claude-sonnet-5")   # fix -> coder
         self.assertEqual(by_id["t2"]["role"], "coder")
         self.assertEqual(by_id["t3"]["model"], "claude-haiku-4-5")  # classifier
@@ -298,6 +298,32 @@ class CountGatedActionsTest(unittest.TestCase):
             {"kind": "bash", "command": "gh pr create"},        # gated (F1)
         ]
         self.assertEqual(orchestrator.count_gated_actions(actions, "/wt/session"), 3)
+
+
+class WindowAwarePlanRunsTest(unittest.TestCase):
+    # ADH-005: subscription-lane plan_runs reroutes on window headroom when given the ledger.
+    NOW = "2026-08-01T12:00:00+00:00"
+
+    def _sonnet_tight(self):
+        # $24.5 sonnet burn 6 days ago -> 7d_sonnet tight, opus clear
+        return [{"cost_usd": 24.5, "started_at": "2026-07-26T12:00:00+00:00",
+                 "model": "claude-sonnet-5", "lane": "subscription", "cost_basis": "estimated"}]
+
+    def test_no_window_inputs_keeps_strength_map(self):
+        specs = orchestrator.plan_runs([{"task_id": "t1", "task_type": "fix"}], "S", lane="subscription")
+        self.assertEqual(specs[0]["model"], "claude-sonnet-5")
+
+    def test_sonnet_tight_upgrades_coder_to_opus(self):
+        specs = orchestrator.plan_runs([{"task_id": "t1", "task_type": "fix"}], "S",
+                                       lane="subscription", records=self._sonnet_tight(), now=self.NOW)
+        self.assertEqual(specs[0]["model"], "claude-opus-5")
+        self.assertEqual(specs[0]["route_reason"], "sonnet_tight_upgraded_to_opus")
+
+    def test_api_lane_never_reroutes(self):
+        specs = orchestrator.plan_runs([{"task_id": "t1", "task_type": "fix"}], "S",
+                                       lane="api", records=self._sonnet_tight(), now=self.NOW)
+        self.assertEqual(specs[0]["model"], "claude-sonnet-5")
+        self.assertNotIn("route_reason", specs[0])
 
 
 if __name__ == "__main__":

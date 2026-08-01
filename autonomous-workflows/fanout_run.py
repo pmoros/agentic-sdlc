@@ -71,7 +71,8 @@ def execute_fanout(
     prior = records or []
     specs = orchestrator.plan_runs(
         subtasks, session_id, per_worker_budget=per_worker_budget,
-        lane=lane, per_worker_window_est_usd=per_worker_window_est_usd)
+        lane=lane, per_worker_window_est_usd=per_worker_window_est_usd,
+        records=prior, now=now, allotments=allotments)
 
     # --- admission: refuse the whole fan-out before launching anything --------
     if lane == "subscription":

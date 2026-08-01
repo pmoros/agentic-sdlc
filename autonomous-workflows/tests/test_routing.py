@@ -16,7 +16,10 @@ import routing  # noqa: E402
 
 class RoleModelTest(unittest.TestCase):
     def test_planner_is_opus(self):
-        self.assertEqual(routing.model_for_role("planner"), "claude-opus-4-8")
+        self.assertEqual(routing.model_for_role("planner"), "claude-opus-5")
+
+    def test_architect_is_fable(self):
+        self.assertEqual(routing.model_for_role("architect"), "claude-fable-5")
 
     def test_coder_is_sonnet(self):
         self.assertEqual(routing.model_for_role("coder"), "claude-sonnet-5")
@@ -31,8 +34,12 @@ class RoleModelTest(unittest.TestCase):
 
 class TaskTypeRoleTest(unittest.TestCase):
     def test_reasoning_task_types_map_to_planner(self):
-        for tt in ("plan", "design", "review", "research", "architect", "spike"):
+        for tt in ("plan", "design", "review", "research", "spike"):
             self.assertEqual(routing.role_for_task_type(tt), "planner", tt)
+
+    def test_escalation_task_types_map_to_architect(self):
+        for tt in ("architect", "hard-debug", "deep-research"):
+            self.assertEqual(routing.role_for_task_type(tt), "architect", tt)
 
     def test_coding_task_types_map_to_coder(self):
         for tt in ("code", "implement", "fix", "refactor", "feat", "test", "chore"):
@@ -51,11 +58,11 @@ class TaskTypeRoleTest(unittest.TestCase):
 
 class SelectModelTest(unittest.TestCase):
     def test_by_role(self):
-        self.assertEqual(routing.select_model(role="planner"), "claude-opus-4-8")
+        self.assertEqual(routing.select_model(role="planner"), "claude-opus-5")
         self.assertEqual(routing.select_model(role="classifier"), "claude-haiku-4-5")
 
     def test_by_task_type(self):
-        self.assertEqual(routing.select_model(task_type="design"), "claude-opus-4-8")
+        self.assertEqual(routing.select_model(task_type="design"), "claude-opus-5")
         self.assertEqual(routing.select_model(task_type="fix"), "claude-sonnet-5")
 
     def test_role_wins_over_task_type(self):

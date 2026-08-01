@@ -202,5 +202,39 @@ class NextResumeAtTest(unittest.TestCase):
         self.assertIsNone(window_guard.next_resume_at(recs, NOW))
 
 
+class FableTierAndHeadroomTest(unittest.TestCase):
+    def test_tier_recognizes_fable(self):
+        self.assertEqual(window_guard.tier({"model": "claude-fable-5"}), "fable")
+
+    def test_headroom_all_clear(self):
+        # no burn -> every family's headroom is its tightest allotment (5h = 5.0)
+        h = window_guard.window_headroom([], None, NOW)
+        for fam in ("opus", "sonnet", "haiku", "fable"):
+            self.assertAlmostEqual(h[fam]["headroom"], 5.0)
+            self.assertFalse(h[fam]["tight"])
+
+    def test_shared_5h_burn_makes_every_family_tight(self):
+        # $4.5 inside the 5h window -> 5h headroom 0.5 -> ALL families tight (incl. opus)
+        recs = [_rec(4.5, "2026-07-30T09:00:00+00:00", model="claude-sonnet-5")]
+        h = window_guard.window_headroom(recs, None, NOW, margin=1.0)
+        for fam in ("opus", "sonnet", "haiku", "fable"):
+            self.assertAlmostEqual(h[fam]["headroom"], 0.5)
+            self.assertTrue(h[fam]["tight"])
+
+    def test_sonnet_weekly_cap_tightens_sonnet_not_opus(self):
+        # $24.5 sonnet burn 6 days ago (outside 5h) -> 7d_sonnet headroom 0.5 (tight);
+        # opus sees only 5h(5.0)/7d(15.5) -> 5.0 (clear)
+        recs = [_rec(24.5, "2026-07-24T12:00:00+00:00", model="claude-sonnet-5")]
+        h = window_guard.window_headroom(recs, None, NOW, margin=1.0)
+        self.assertTrue(h["sonnet"]["tight"]); self.assertAlmostEqual(h["sonnet"]["headroom"], 0.5)
+        self.assertFalse(h["opus"]["tight"]); self.assertAlmostEqual(h["opus"]["headroom"], 5.0)
+
+    def test_fable_ceiling_tightens_only_fable(self):
+        recs = [_rec(19.5, "2026-07-24T12:00:00+00:00", model="claude-fable-5")]
+        h = window_guard.window_headroom(recs, None, NOW, margin=1.0)
+        self.assertTrue(h["fable"]["tight"]); self.assertAlmostEqual(h["fable"]["headroom"], 0.5)
+        self.assertFalse(h["opus"]["tight"]); self.assertFalse(h["sonnet"]["tight"])
+
+
 if __name__ == "__main__":
     unittest.main()
