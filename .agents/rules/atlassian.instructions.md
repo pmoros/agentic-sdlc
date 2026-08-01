@@ -15,23 +15,35 @@ discipline) is reusable as-is.
 
 ## Quick Reference
 
+**Org:** forgestop · **Atlassian site:** `forgestop.atlassian.net` (single
+Cloud site for both Jira and Confluence, served by the `atlassian` remote MCP
+server — see `AGENTS.md` § MCP Setup).
+
+### Jira projects
+
 | Project | Key | Jira Instance | Issue Types |
 |---|---|---|---|
-| _Example: general work tracking_ | `PROJ` | `yourcompany.atlassian.net` | Story, Task, Bug, Spike, Sub-task |
-| _Example: change management_ | `CHG` | `yourcompany.atlassian.net` | Standard Change Request |
+| INFRA & OPS | `TBD` — confirm on first connect | `forgestop.atlassian.net` | `TBD` — confirm on first connect |
 
-> Replace this table with your real projects. Keep one row per Jira project
-> this framework is used against, and keep the per-project sections below in
-> sync with it.
+### Confluence spaces
+
+| Space | Key | Confluence Instance |
+|---|---|---|
+| Software Development | `TBD` — confirm on first connect | `forgestop.atlassian.net` |
+
+> **Partially seeded.** Names + site are real; keys, issue types, custom
+> fields, and workflow states are still `TBD` — capture them on the first
+> successful MCP read (a project/space lookup returns the key), then fill the
+> per-project section below and remove the `TBD` markers. Add a row per Jira
+> project / Confluence space this framework is used against.
 
 ---
 
 ## Shared — Language Policy
 
 All content written to Jira and Confluence — summaries, descriptions,
-comments, resolution notes, attachments — must be in the language your team
-has standardized on for tickets (commonly English), regardless of the
-language used in conversation with the user. State your team's policy here.
+comments, resolution notes, attachments — must be in **English**, regardless
+of the language used in conversation with the user.
 
 ---
 
