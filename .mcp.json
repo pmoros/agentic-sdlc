@@ -28,6 +28,10 @@
       "headers": {
         "Api-Key": "${NEW_RELIC_API_KEY}"
       }
+    },
+    "atlassian": {
+      "type": "sse",
+      "url": "https://mcp.atlassian.com/v1/sse"
     }
   }
 }

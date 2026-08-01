@@ -16,6 +16,12 @@
 // All paths below are relative to this file (repo root).
 // Sibling repos are "../<repo-name>".
 //
+// OPTIONAL FRAMEWORK FOLDER
+// If this repo and work-sessions are grouped under a shared framework
+// folder (see README.md → Getting Started), work-sessions is still
+// "../work-sessions", but target repos are one level further up:
+// "../../your-app-repo", not "../your-app-repo".
+//
 // Session worktrees are NOT tracked here — they live under
 // work-sessions/sessions/<id>/worktrees/, which has its own
 // workspace file for that purpose.
@@ -30,6 +36,7 @@
 
     // ── Sibling repos ────────────────────────────────────────────────────────
     // Add the repos you actively work with. Comment out repos not in scope.
+    // Use "../../your-app-repo" instead if this repo lives inside a framework folder.
     {
       "name": "work-sessions",
       "path": "../work-sessions"

@@ -41,6 +41,21 @@ everything so it survives across machines and time.
      work-sessions/       (your private instance, from the template)
      <your other repos>/
    ```
+   Optionally, group this repo and `work-sessions` under a shared **framework
+   folder** so an agent can start a session there and find both without
+   hunting through `repos/`:
+   ```
+   repos/
+     agentic-sdlc-framework/   (framework folder — not a git repo itself)
+       agentic-sdlc/           (this repo)
+       work-sessions/          (your private instance)
+     <your other repos>/
+   ```
+   The framework folder is the recommended way to invoke this toolbox, but
+   changes what "sibling" means for target repos — see Reference Repo Policy
+   below. It needs its own `CLAUDE.md`, plus symlinks for `.mcp.json` and
+   `.claude/{agents,commands,skills}` pointing back into this repo, so a
+   session started there has the same tools/MCP as one started here directly.
 2. **Fill in the integration templates.** `.agents/rules/atlassian.instructions.md`
    and `.agents/rules/aws.instructions.md` ship with placeholder projects/values —
    replace them with your org's actual Jira projects, custom fields, AWS
@@ -79,6 +94,11 @@ happens only in a worktree created under a session's `worktrees/` folder in
 `work-sessions`. See `docs/create-worktree.md` and the
 Reference Repo Policy section of `AGENTS.md`.
 
+If this repo lives inside a framework folder (see Getting Started above),
+`repos/` is the framework folder's **parent**, not this repo's immediate
+parent. Target-repo paths resolve to `<framework-folder>/../<name>` — this
+repo's grandparent — while `work-sessions` stays a direct sibling either way.
+
 Every session gets a mandatory worktree of this repo (detached, on the
 default branch, kept in sync) at `worktrees/agentic-sdlc/` in its session
 folder, so its tools are available without ever touching this repo's own
@@ -87,7 +107,9 @@ checkout directly.
 ## VS Code Multi-Root Workspace
 
 The recommended way to browse this repo alongside its sibling repos under
-`repos/` is a VS Code **multi-root workspace**.
+`repos/` is a VS Code **multi-root workspace**. If this repo lives inside a
+framework folder, target-repo entries in the workspace file need
+`../../<name>` (repos-root sibling), while `work-sessions` stays `../work-sessions`.
 
 ### Setup (one time per developer)
 

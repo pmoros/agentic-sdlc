@@ -14,6 +14,11 @@ Per the **Reference Repo Policy** in `AGENTS.md`: repos under
 branch, always kept in sync, never edited directly. This command is the only
 way work gets a place to happen; there is no branch-only/no-worktree mode.
 
+If this repo lives inside a shared **framework folder** alongside
+`work-sessions` (this instance: `pmoros-agentic-framework/`), `repos/` means
+the framework folder's parent — this repo's **grandparent**, not its
+immediate parent (which is only ever `work-sessions`). See step 2.
+
 ## Steps
 
 ### 1. Identify the session
@@ -29,7 +34,11 @@ Otherwise read `<work-sessions-repo>/SESSIONS_STATE.md` (sibling
 ### 2. Identify the repo, branch, and base ref
 
 Ask only for what isn't already known from context:
-- **Repo** — a name (resolved to `repos/<name>`, sibling of this repo) or an explicit path.
+- **Repo** — a name (resolved to `repos/<name>`) or an explicit path. If this
+  repo sits inside a framework folder (see above), that resolves to
+  `<framework-folder>/../<name>` — **not** `../<name>` from this repo, which
+  would land inside the framework folder instead (only `work-sessions` lives
+  there).
 - **Branch name** — required unless this is the special agentic-sdlc tools worktree (which uses `--detach`, handled by `initialize_work_session_folder` instead — this command is for target repos).
 - **Base ref** — default: the repo's auto-detected default branch. Offer the user a chance to override (e.g. the `code` monorepo conventionally branches off `develop`, not its default branch).
 

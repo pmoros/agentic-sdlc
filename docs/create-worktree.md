@@ -198,6 +198,11 @@ worktree. `--sync` (on by default) enforces this by fetching and hard-syncing
 the source repo to `origin/<base>` before creating anything, and refuses to
 proceed if the source repo has local changes rather than discarding them.
 
+If this repo lives inside a shared framework folder alongside
+`work-sessions`, a target repo's `<repo-path>` argument is
+`<framework-folder>/../<name>` — one level further up than `work-sessions`,
+which stays a direct sibling. See `#create_work_tree.prompt.md`.
+
 The one repo every session needs read access to but never edits is
 `agentic-sdlc` itself (for its scripts/runbooks/`.agents`
 tooling). `initialize_work_session_folder` creates a **detached** worktree of
