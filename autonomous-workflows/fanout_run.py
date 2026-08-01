@@ -25,6 +25,7 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import budget
 import fanout
@@ -88,8 +89,10 @@ def execute_fanout(
     spec_by_id = {s["task_id"]: s for s in specs}
     task_ids = [s["task_id"] for s in specs]
 
-    # --- schedule + launch (deps- and concurrency-aware; launch is synchronous
-    # here — real parallelism is a future enhancement over the same loop) ------
+    # --- schedule + launch: each runnable batch launches in PARALLEL (workers
+    # are I/O-bound `claude -p` subprocesses); deps + the concurrency cap order
+    # work across batches. Records land + the manifest mutates single-threaded,
+    # in deterministic `ready` order, regardless of which worker finishes first.
     done: set = set()
     running: set = set()
     out: dict = {}
@@ -100,7 +103,9 @@ def execute_fanout(
             break  # nothing runnable (dep cycle, or every remaining worker paused)
         for tid in ready:
             fanout.set_status(manifest, tid, "running")
-            record = launch(spec_by_id[tid])
+        with ThreadPoolExecutor(max_workers=len(ready)) as pool:
+            launched = list(pool.map(lambda tid: (tid, launch(spec_by_id[tid])), ready))
+        for tid, record in launched:
             out[tid] = record
             joined = orchestrator.join_input(record)["outcome"]
             fanout.set_status(manifest, tid, _manifest_status(joined),

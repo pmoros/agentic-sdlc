@@ -62,7 +62,7 @@ class ExecuteFanoutTest(unittest.TestCase):
         self.assertEqual(res["decision"], "ready_for_final_review")
         self.assertIsNotNone(res["merge"])
         self.assertFalse(res["merge"]["conflict"])
-        self.assertEqual(launch.calls, ["t1", "t2"])          # both launched
+        self.assertEqual(sorted(launch.calls), ["t1", "t2"])  # both launched (order not guaranteed under parallelism)
         self.assertGreater(res["metrics"]["estimated_savings_usd"], 0)
         self.assertTrue(res["gate"]["passed"])
         self.assertTrue(res["teardown_plan"])                 # teardown computed
@@ -116,6 +116,23 @@ class ExecuteFanoutTest(unittest.TestCase):
         res = self._run(TWO, launch, lane="api", per_worker_budget=3.0, spend=195.0, cap=200.0)
         self.assertFalse(res["admitted"])
         self.assertEqual(launch.calls, [])
+
+    # --- a batch of independent workers actually launches in parallel ---------
+    def test_launches_a_batch_in_parallel(self):
+        import threading
+        # A Barrier(3) only releases when all 3 workers are in-flight at once. If
+        # launch ran sequentially, the first .wait() would time out (BrokenBarrier)
+        # and this test would error — so passing proves real concurrency.
+        barrier = threading.Barrier(3, timeout=5)
+
+        def launch(spec):
+            barrier.wait()
+            return rec(spec["task_id"])
+
+        subtasks = [{"task_id": f"t{i}", "role": "coder"} for i in range(3)]
+        res = fanout_run.execute_fanout(subtasks, "S", launch=launch, merge=clean_merge,
+                                        now=NOW, max_concurrent=3)
+        self.assertEqual(res["decision"], "ready_for_final_review")
 
     # --- deps drive launch + merge order -------------------------------------
     def test_deps_drive_launch_and_merge_order(self):
