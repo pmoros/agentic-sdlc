@@ -116,6 +116,14 @@ than discarding them. See `docs/create-worktree.md`.
 There is no branch-only/no-worktree escape hatch — `#create_work_tree.prompt.md`
 is the only way a target repo gets a place for work to happen.
 
+**If this repo lives inside a shared framework folder** alongside
+`work-sessions` (this instance: `pmoros-agentic-framework/`, moved into
+`forgestop-repos/` so target repos are reachable), `repos/` above means the
+framework folder's **parent** — this repo's grandparent, not its immediate
+parent (which is only ever `work-sessions`). `work-sessions` stays a direct
+sibling of this repo either way; only target-repo resolution shifts by one
+level. See `#create_work_tree.prompt.md` for the exact rule.
+
 ### Session lifecycle
 
 Use these in order: `start-work-session` (skill) to begin →

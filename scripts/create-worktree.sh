@@ -64,6 +64,9 @@
 #   scripts/create-worktree.sh ../code \
 #     --dest ../work-sessions/sessions/PROJ-1234-fix-thing/worktrees/code-proj-1234-fix-thing \
 #     --branch feat/PROJ-1234-fix-thing --base develop
+#   # If this repo lives inside a shared framework folder alongside
+#   # work-sessions, target repos are one level further up than the examples
+#   # above (../../code, not ../code) — work-sessions stays a direct sibling.
 #   scripts/create-worktree.sh --refresh .../worktrees/agentic-sdlc
 #   scripts/create-worktree.sh --promote .../worktrees/code-proj-1234-fix-thing
 #
