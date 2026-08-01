@@ -13,7 +13,7 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import fanout        # noqa: E402
 import orchestrator  # noqa: E402
 import window_guard  # noqa: E402

@@ -4,7 +4,7 @@ The pure "brain" of the supervisor: it composes the budget guard (budget.py) and
 the authorization policy (policy.py) with the worker's state into the next control
 action. No subprocess, no I/O — the `claude -p` subprocess/steer wiring is a thin
 shell around this and is built once the gateway is live (see
-docs/phase-2-worker-and-budget.md → Verified mechanics).
+the phase-2 worker/budget design notes → Verified mechanics).
 """
 from __future__ import annotations
 

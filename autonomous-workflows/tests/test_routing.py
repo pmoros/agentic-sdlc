@@ -4,13 +4,13 @@ Maps a worker's ROLE (or task type) to the right Claude model per the ADR-001
 tiering: Opus for planning/reasoning, Sonnet for coding, Haiku for classify.
 Before this, every worker defaulted to Sonnet 5 regardless of task.
 
-Run: python3 scripts/tests/test_routing.py
+Run: python3 autonomous-workflows/tests/test_routing.py
 """
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import routing  # noqa: E402
 
 

@@ -6,7 +6,7 @@ disposable integration branch; a conflict is detected on the *cumulative* tree
 reported. Driven against a throwaway git fixture (never a real repo/remote), per
 the Script Testing Standard; skipped if git is absent.
 
-Run: python3 scripts/tests/test_integrate.py
+Run: python3 autonomous-workflows/tests/test_integrate.py
 """
 import shutil
 import subprocess
@@ -15,7 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import integrate  # noqa: E402
 
 

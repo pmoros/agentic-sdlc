@@ -1,7 +1,7 @@
 # LiteLLM gateway — the $200/month hard cap (runbook)
 
 This is the **minimal gateway that makes the $200/month ceiling real and un-bypassable**
-(layers 1–3 of the budget design in `../../docs/phase-2-worker-and-budget.md`). Stand this
+(layers 1–3 of the budget design). Stand this
 up **before** the first money-spending autonomous run.
 
 ## What it does
@@ -18,7 +18,7 @@ up **before** the first money-spending autonomous run.
 ## Launch
 
 ```sh
-cd scripts/gateway
+cd autonomous-workflows/gateway
 cp .env.example .env          # then edit .env: set ANTHROPIC_API_KEY, LITELLM_MASTER_KEY, POSTGRES_PASSWORD
 docker compose up -d          # starts postgres + litellm on :4000
 curl -s http://localhost:4000/health/liveliness   # expect "I'm alive!" or 200

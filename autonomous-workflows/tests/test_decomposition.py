@@ -4,13 +4,13 @@ The planner's sub-tasks must be validated before plan_runs: schema, unique ids,
 deps reference known ids and are acyclic, and NO two sub-tasks' touched_paths
 overlap (two workers editing the same package = guaranteed conflict). Pure logic.
 
-Run: python3 scripts/tests/test_decomposition.py
+Run: python3 autonomous-workflows/tests/test_decomposition.py
 """
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import decomposition  # noqa: E402
 
 

@@ -5,13 +5,13 @@ composes the budget guard (budget.py) and the authorization policy (policy.py)
 with the worker's state into the next control decision. No subprocess, no I/O —
 so it is fully testable offline, independent of the `claude -p` mechanics.
 
-Run: python3 scripts/tests/test_supervisor.py
+Run: python3 autonomous-workflows/tests/test_supervisor.py
 """
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import supervisor  # noqa: E402
 
 ROOT = "/wt/session"

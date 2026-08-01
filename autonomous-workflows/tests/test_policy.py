@@ -4,13 +4,13 @@ Makes the allow/gate boundary from docs/autonomous-execution.instructions.md
 executable: every action a worker might take resolves to "allowed" (unattended)
 or "gated" (route to a human via any channel). Fail-closed by default.
 
-Run: python3 scripts/tests/test_policy.py
+Run: python3 autonomous-workflows/tests/test_policy.py
 """
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import policy  # noqa: E402
 
 ROOT = "/wt/session"  # the worker's session root (its worktrees + tracking files live under here)

@@ -15,21 +15,21 @@
 #     gateway). cost_basis=billed. Byte-for-byte the pre-pivot behaviour.
 #
 # USAGE
-#   scripts/run-worker.sh <task-id> "<prompt>"            # inline prompt
-#   scripts/run-worker.sh <task-id> @path/to/prompt.md    # prompt from a file
-#   LANE=api BUDGET=5 MODEL=claude-sonnet-5 scripts/run-worker.sh t3 @files/task.md
+#   autonomous-workflows/run-worker.sh <task-id> "<prompt>"            # inline prompt
+#   autonomous-workflows/run-worker.sh <task-id> @path/to/prompt.md    # prompt from a file
+#   LANE=api BUDGET=5 MODEL=claude-sonnet-5 autonomous-workflows/run-worker.sh t3 @files/task.md
 #
 # ENV (optional): LANE (subscription|api; default subscription), ROLE
 #   (planner|coder|classifier — or a task type like fix/design/research/triage —
 #   resolved to a model via routing.py; default coder=Sonnet 5), MODEL (explicit
 #   override, wins over ROLE), BUDGET (api-lane USD/mo key cap, default 5),
 #   WORKER_TOOLS (allowed-tools list), GATEWAY, RUN_RECORDS_DIR (output dir
-#   override; default <session>/run-records).
+#   override; default <parent>/run-records).
 
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # .../scripts
-SESS="$(dirname "$HERE")"                               # session root
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # .../autonomous-workflows
+SESS="$(dirname "$HERE")"                               # subsystem parent (repo root)
 GW="$HERE/gateway"
 GATEWAY="${GATEWAY:-http://localhost:4000}"
 BUDGET="${BUDGET:-5}"

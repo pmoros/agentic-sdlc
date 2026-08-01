@@ -2,14 +2,14 @@
 $200/month hard ceiling ("no surprises"). This is layer 4 of the defense-in-depth
 budget design (gap-analysis §6 Hard budget); the gateway monthly cap is layer 1.
 
-Run: python3 scripts/tests/test_budget.py
+Run: python3 autonomous-workflows/tests/test_budget.py
 """
 import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import budget  # noqa: E402
 
 NOW = datetime(2026, 7, 15, tzinfo=timezone.utc)
@@ -146,8 +146,8 @@ class OvershootTest(unittest.TestCase):
         self.assertAlmostEqual(budget.worst_case_overshoot(per_key_budget=0.10, concurrent_requests=3), 0.30, places=6)
 
     def test_safe_concurrency_cap_stays_under_reserve_headroom(self):
-        # per-key budget $30, cap $200 -> reserve headroom = 180; cap should keep
-        # worst-case overshoot comfortably (50%) under that headroom
+        # per-key budget $30, cap $200 -> spend-to-halt budget = $180 (cap x HALT);
+        # the cap keeps worst-case overshoot under 50% of that ($90)
         n = budget.safe_concurrency_cap(per_key_budget=30.0, cap=200.0, safety_margin=0.5)
         self.assertLessEqual(30.0 * n, 200.0 * budget.HALT * 0.5)
         self.assertGreaterEqual(n, 1)

@@ -5,13 +5,13 @@ committed (in-flight) burn from the fan-out manifest, strict limit-error
 parsing (the authoritative layer's detector), and pre-flight admission vs
 the {5h, 7d, 7d_sonnet} allotments.
 
-Run: python3 scripts/tests/test_window_guard.py
+Run: python3 autonomous-workflows/tests/test_window_guard.py
 """
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import window_guard  # noqa: E402
 
 NOW = "2026-07-30T12:00:00+00:00"

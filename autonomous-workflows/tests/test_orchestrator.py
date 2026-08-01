@@ -6,13 +6,13 @@ fan-out against the $200 cap, and decide the N-branch JOIN (the hard part the
 proposal underspecified): violation > merge-conflict > failure > ready-for-review.
 No subprocess, no git — fully testable offline.
 
-Run: python3 scripts/tests/test_orchestrator.py
+Run: python3 autonomous-workflows/tests/test_orchestrator.py
 """
 import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import orchestrator  # noqa: E402
 
 

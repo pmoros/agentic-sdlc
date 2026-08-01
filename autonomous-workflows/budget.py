@@ -1,7 +1,7 @@
 """Phase-2 budget guard — local, pre-flight enforcement of the $200/month cap.
 
-Layer 4 of the defense-in-depth budget design (see
-docs/phase-2-worker-and-budget.md and gap-analysis §6 "Hard budget"):
+Layer 4 of the defense-in-depth budget design (the local pre-flight
+guard that stops runs gracefully below the gateway's hard cap):
 the worker supervisor calls `can_start()` before every run/turn and
 `status()` for alerts, so runs stop *gracefully below* the hard cap rather
 than dying when the gateway (layer 1) refuses traffic at $200.
@@ -106,9 +106,10 @@ def worst_case_overshoot(per_key_budget: float, concurrent_requests: int) -> flo
 
 
 def safe_concurrency_cap(per_key_budget: float, cap: float = MONTHLY_CAP_USD, safety_margin: float = 0.5) -> int:
-    """Largest worker concurrency such that `worst_case_overshoot` stays within
-    `safety_margin` of the headroom already reserved below the HALT threshold
-    (never eats into the reserve meant to let in-flight runs finish cleanly)."""
+    """Largest worker concurrency whose `worst_case_overshoot` stays within
+    `safety_margin` of the spend-to-halt budget (`cap * HALT`) — a conservative
+    fraction of what may be spent before the local guard halts, leaving the
+    remainder as slack for in-flight runs to finish cleanly."""
     if per_key_budget <= 0:
         return 0
     headroom = cap * HALT * safety_margin

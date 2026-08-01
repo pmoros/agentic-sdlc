@@ -2,7 +2,7 @@
 
 Runner-agnostic: plain unittest, no pytest fixtures (mirrors the agentic-sdlc
 Script Testing Standard). Run with:
-    python3 -m unittest discover -s scripts/tests -t scripts
+    python3 -m unittest discover -s autonomous-workflows/tests -t autonomous-workflows
 """
 import json
 import sys
@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import metrics  # noqa: E402
 
 

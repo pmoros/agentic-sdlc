@@ -5,8 +5,8 @@ aggregates per-task run-records into the cost / quality / autonomy / throughput 
 safety metrics, and evaluates the per-phase go/no-go gates.
 
 Pure functions, no external deps — importable and testable in isolation
-(see scripts/tests/test_metrics.py). Run:
-    python3 scripts/tests/test_metrics.py
+(see autonomous-workflows/tests/test_metrics.py). Run:
+    python3 autonomous-workflows/tests/test_metrics.py
 """
 from __future__ import annotations
 

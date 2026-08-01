@@ -6,7 +6,7 @@ manifest-driven teardown plan (revoke keys, remove worktrees, prune branches) th
 is idempotent and crash-re-entrant. The actual subprocess launch + git/key calls
 are thin wrappers around these.
 
-Run: python3 scripts/tests/test_fanout.py
+Run: python3 autonomous-workflows/tests/test_fanout.py
 """
 import json
 import sys
@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # autonomous-workflows/ on path
 import fanout  # noqa: E402
 
 
