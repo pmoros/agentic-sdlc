@@ -37,7 +37,23 @@ class DefineWorkItem(TempRepoCase):
         with open(os.path.join(self.items_dir, f"{item_id}.json")) as fh:
             return json.load(fh)
 
+    def read_view(self, name):
+        with open(os.path.join(self.ws, "work", name)) as fh:
+            return json.load(fh)
+
     # --- happy path ---------------------------------------------------
+
+    def test_regenerates_views_after_writing_the_item(self):
+        r = self.define("ADH-9", ["--description", "d"])  # defaults to status "grooming"
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("ADH-9", self.read_view("backlog.json"))
+        self.assertNotIn("ADH-9", self.read_view("wip.json"))
+
+    def test_moving_status_moves_the_item_between_views(self):
+        self.define("ADH-9", ["--description", "d", "--status", "grooming"])
+        self.define("ADH-9", ["--status", "in progress"])
+        self.assertNotIn("ADH-9", self.read_view("backlog.json"))
+        self.assertIn("ADH-9", self.read_view("wip.json"))
 
     def test_creates_item_file(self):
         r = self.define("ADH-9", ["--description", "Do a thing", "--task-type", "feat"])

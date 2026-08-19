@@ -147,3 +147,6 @@ TASK_TYPE_ENV="$TASK_TYPE" NOW_ENV="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
 python3 "$SCRIPT_DIR/lib/define_work_item.py" || die "failed to define item $ITEM_ID"
 
 err ">> wrote $ITEM_FILE"
+
+"$SCRIPT_DIR/regenerate-views.sh" --work-sessions-repo "$WORK_SESSIONS_REPO" \
+  || die "wrote $ITEM_FILE but regenerate-views.sh failed — views may be stale, re-run it directly"
