@@ -55,6 +55,14 @@ class MigrateSessionsStateSh(TempRepoCase):
         self.assertEqual(len(backups), 1)
         self.assertEqual(open(os.path.join(self.ws, backups[0])).read(), before)
 
+    def test_commit_preserves_the_trailing_newline(self):
+        # Regression: routing the migrated content through a bash $(...)
+        # capture on the write path silently stripped the file's final
+        # newline (command substitution always strips trailing newlines).
+        self.assertTrue(open(self.state).read().endswith("\n"))
+        self.assertEqual(self.m(["--commit"]).returncode, 0)
+        self.assertTrue(open(self.state).read().endswith("\n"))
+
     def test_commit_is_idempotent(self):
         self.assertEqual(self.m(["--commit"]).returncode, 0)
         once = open(self.state).read()
@@ -68,6 +76,21 @@ class MigrateSessionsStateSh(TempRepoCase):
         self.assertNotEqual(r.returncode, 0)
 
     def test_verify_passes_after_commit(self):
+        self.assertEqual(self.m(["--commit"]).returncode, 0)
+        r = self.m(["--verify"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_verify_ignores_prose_lines_that_merely_contain_a_pipe(self):
+        # Regression: a legend line like the real file's
+        # "**Status values:** `active | paused | done | stopped`" is not a
+        # table row and must not be parsed as one by --verify.
+        with open(self.state) as fh:
+            content = fh.read()
+        content = content.replace(
+            "# Sessions State\n\n",
+            "# Sessions State\n\n**Status values:** `active | paused | done | stopped`\n\n")
+        with open(self.state, "w") as fh:
+            fh.write(content)
         self.assertEqual(self.m(["--commit"]).returncode, 0)
         r = self.m(["--verify"])
         self.assertEqual(r.returncode, 0, r.stderr)

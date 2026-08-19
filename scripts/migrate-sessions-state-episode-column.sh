@@ -77,6 +77,11 @@ case "$MODE" in
     ;;
 
   commit)
+    # Compare via the variable (command substitution strips trailing
+    # newlines on both sides equally, so this equality check is unaffected)
+    # but WRITE via direct redirection, never through the variable — a
+    # bash `$(...)` capture always strips trailing newlines, which would
+    # silently drop the file's final newline on write.
     migrated="$(python3 "$LIB" < "$STATE")"
     if [[ "$migrated" == "$(cat "$STATE")" ]]; then
       err ">> already migrated (Item column present) — nothing to do"
@@ -86,7 +91,7 @@ case "$MODE" in
     cp "$STATE" "$backup"
     err ">> backed up original to $backup"
     tmp="$STATE.tmp"
-    printf '%s' "$migrated" > "$tmp"
+    python3 "$LIB" < "$STATE" > "$tmp"
     mv "$tmp" "$STATE"
     err ">> wrote $STATE with the new Item column"
     ;;
@@ -99,6 +104,10 @@ case "$MODE" in
 
     fail=0
     while IFS= read -r row; do
+      # Only real table rows — a prose line that merely CONTAINS a pipe
+      # (e.g. "**Status values:** `active | paused | done | stopped`") is
+      # not one, and must not be parsed as if it were.
+      [[ "$row" == \|*\| ]] || continue
       [[ "$row" == "$header" ]] && continue
       [[ "$row" =~ ^\|---.*\|$ ]] && continue
       sid="$(echo "$row" | awk -F'|' '{gsub(/^ +| +$/, "", $2); print $2}')"
