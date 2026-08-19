@@ -25,6 +25,14 @@ ask which to groom (or offer to groom the highest-priority one).
   `.agents/rules/atlassian.instructions.md` for Jira reads.
 - If the item references docs/PRs/dashboards, skim them enough to judge whether
   they actually answer the open questions.
+- **Hierarchy (ADH-012)** — this is a read-only, computed display; nothing is
+  written back to any item by this step:
+  - If the item has a `parent_id`, read that parent's own file and show its
+    title + status in one line (e.g. "Sub-item of `ADH-020` — Build the
+    thing (in progress)").
+  - Otherwise, scan `<work>/work/items/*.json` for any item whose
+    `parent_id` equals this one's id. If any exist, list them
+    (id/title/status) and a plain count (e.g. "3/5 sub-items done").
 
 ## Step 3 — Run the readiness checklist
 
@@ -49,7 +57,12 @@ cite the evidence:
 6. **Dependencies & blockers** — does it depend on other items or teams? Is it
    actually blocked right now?
 7. **Size sanity** — is the `scope` still right? If `L`/`XL`, recommend
-   breaking it into smaller items at planning.
+   breaking it into smaller items — and, per ADH-012, this doesn't have to
+   wait for `#plan-cycle`: offer to create the sub-item(s) right now via
+   `scripts/define-work-item.sh <new-id> --description "..." --status
+   grooming --parent <this-id> --work-sessions-repo <path>`, which links it
+   as a real sub-item immediately rather than only noting the breakdown in
+   prose.
 
 ## Step 4 — Verdict
 
