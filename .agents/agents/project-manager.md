@@ -119,16 +119,25 @@ Keep `current_state.is_blocked` in sync with reality — `WORK_STATE.md`'s
 
 ## Staleness & health heuristics (defaults — state them when you apply them)
 
-- **Stale WIP**: an item in `wip.json` with no `history` entry in the last
-  **7 days**.
+`backlog.json`/`wip.json` are thin generated views (`{title, status,
+priority, scope}` per id only) — they give you the id list, but `history`,
+`current_state`, and `roadmap` live only in each item's own
+`work/items/<id>.json`. Applying any heuristic below is a two-hop read: the
+view for which ids to look at, then that id's item file for the detail
+field.
+
+- **Stale WIP**: an item in `wip.json` whose own `work/items/<id>.json` has
+  no `history` entry in the last **7 days**.
 - **Stale grooming**: a `backlog.json` item sitting in `grooming` for more than
-  **30 days**.
-- **On hold too long**: `on hold` / `is_blocked: true` for more than **14 days**
-  with no `history` movement — escalate or drop.
+  **30 days** (per its item file's `history`).
+- **On hold too long**: `on hold` / `current_state.is_blocked: true` (from
+  the item file) for more than **14 days** with no `history` movement —
+  escalate or drop.
 - **WIP overload**: flag when more than **~3–4** items are simultaneously
   `in progress` for one person; recommend finishing or parking.
-- **Overdue roadmap**: any `roadmap[].target_date` in the past (a `TBD` is not
-  overdue but *is* a planning gap — flag it in planning, not health checks).
+- **Overdue roadmap**: any item file's `roadmap[].target_date` in the past (a
+  `TBD` is not overdue but *is* a planning gap — flag it in planning, not
+  health checks).
 
 Today's date is provided in context; compute ages against it.
 

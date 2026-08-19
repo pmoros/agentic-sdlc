@@ -12,9 +12,13 @@ Assess whether the backlog is on track and regenerate the derived snapshot in
 ## Step 1 — Load state
 
 Read `backlog.json`, `wip.json` (generated views over `work/items/*.json` —
-read-only; see Step 2 for how writes actually happen), `scratchpad.json`,
-`INBOX.md`, and the current `WORK_STATE.md`. Compute ages against today's date
-(provided in context).
+read-only, `{title, status, priority, scope}` per id only; see Step 2 for how
+writes actually happen), `scratchpad.json`, `INBOX.md`, and the current
+`WORK_STATE.md`. Compute ages against today's date (provided in context).
+
+Neither generated view carries `roadmap`, `history`, or `current_state` — for
+Step 3's roadmap-gap and blocked-item analysis, read each relevant id's own
+`work/items/<id>.json`.
 
 ## Step 2 — Optional Jira sync
 
@@ -38,8 +42,10 @@ Evaluate against the heuristics (state the thresholds you used):
 - **Stale grooming** — items in `grooming` for more than 30 days.
 - **Outstanding/aging** — `ready` items that have sat un-picked-up a long time
   (candidates to drop, re-prioritize, or schedule).
-- **Roadmap gaps** — items whose `roadmap` is empty or whose `target_date` is
-  `TBD` (no dated commitment) or already in the past (overdue).
+- **Roadmap gaps** — from each item's own `work/items/<id>.json` (not
+  `backlog.json`, which has no `roadmap` field): items whose `roadmap` is
+  empty or whose `target_date` is `TBD` (no dated commitment) or already in
+  the past (overdue).
 - **Unshaped load** — count of untriaged `INBOX.md` lines (pending
   `#triage-inbox`).
 - **Priority/scope sanity** — any `L`/`XL` items that should be broken down;
@@ -49,9 +55,10 @@ Evaluate against the heuristics (state the thresholds you used):
 
 Rewrite `WORK_STATE.md` preserving its section structure:
 - **Snapshot** counts (backlog / WIP / scratchpad / untriaged inbox).
-- **Stale items**, **Blocked items** (derived from `current_state.is_blocked`),
-  **Status mismatches**, **Next actions** (pulled from each item's `roadmap`,
-  nearest dated `target_date` first).
+- **Stale items**, **Blocked items** (derived from each item's own
+  `current_state.is_blocked` — read from `work/items/<id>.json`, not the
+  generated view), **Status mismatches**, **Next actions** (pulled from each
+  item's own `roadmap`, nearest dated `target_date` first).
 - Keep it a *snapshot* — the JSON files remain the source of truth. Note the
   date of this refresh.
 

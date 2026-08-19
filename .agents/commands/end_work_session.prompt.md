@@ -105,12 +105,17 @@ Load `.agents/rules/atlassian.instructions.md` before this step.
    - If not, this workflow needs a **chain** (e.g. this org's `IO` project:
      `In Progress → IN REVIEW → IN TESTING → READY TO DEPLOY → Done`, no
      direct hop). Confirm the intended target status with the user, then
-     walk it: from each intermediate status, call get-transitions **again**
-     (workflows can be conditional — don't assume step *N*'s options from
-     step *N-1*'s) and pick the transition whose target moves toward the
-     confirmed goal. Build the **full planned sequence** before moving
-     on — the whole chain goes in the batch (step 5), not just the first
-     hop, so the single approval actually covers all of it.
+     draft a **provisional plan** for the full sequence, reasoning from the
+     confirmed goal and the documented workflow shape (e.g. the worked
+     example above) — you cannot literally call get-transitions for a status
+     the issue isn't at yet, since that tool is scoped to the issue's actual
+     current state. Show this full provisional chain in the batch (step 5)
+     so the single approval covers the intended path end-to-end. Hop 1's
+     options come from a real get-transitions call against the issue's
+     actual current status; hops 2+ are confirmed for real only when step 6
+     reaches them and re-checks get-transitions immediately before firing
+     each one — that live re-check, not the plan, is what actually verifies
+     them.
    - If none of the available transitions plausibly lead toward completion
      (e.g. only `Reopen` is offered), plan **no transition** and say so
      explicitly in the batch — "No applicable Jira transition available:
