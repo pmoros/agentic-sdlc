@@ -77,3 +77,5 @@ Use `#create-adr.prompt.md` via the Copilot agent to create a new ADR interactiv
 | ID | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-tiered-conditional-rule-loading.md) | Tiered, Conditional Loading of Integration & Lifecycle Rules | Accepted | 2026-07-13 |
+| [0002](0002-per-session-work-sessions-isolation.md) | Per-Session Isolation of `work-sessions` State | Accepted | 2026-08-18 |
+| [0003](0003-reconcile-adr-0002-with-item-store.md) | Reconcile ADR-0002 with the ADH-008 Work Item Store | Proposed | 2026-08-19 |
