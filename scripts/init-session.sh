@@ -98,17 +98,32 @@ ITEMS_DIR="$WORK_SESSIONS_REPO/work/items"
 BACKLOG_JSON="$WORK_SESSIONS_REPO/work/backlog.json"
 WIP_JSON="$WORK_SESSIONS_REPO/work/wip.json"
 
+# A raw `ls -A` would count a crash-orphaned `<id>.json.lock/` dir (left
+# behind if a prior define-work-item.sh run was killed before its EXIT trap
+# released it) as "populated" with zero real items — silently defeating
+# this guard. Only actual `*.json` files count, matching
+# lib/regenerate_views.py's own item-file filtering.
 items_dir_populated() {
-  [[ -d "$ITEMS_DIR" ]] && [[ -n "$(ls -A "$ITEMS_DIR" 2>/dev/null)" ]]
+  [[ -d "$ITEMS_DIR" ]] || return 1
+  local f
+  for f in "$ITEMS_DIR"/*.json; do
+    [[ -f "$f" ]] && return 0
+  done
+  return 1
 }
 
+# Fails CLOSED: a file that exists but doesn't parse as a non-empty JSON
+# object is treated as "might hold real content" (exit 0 -> triggers the
+# guard), not silently as empty — a corrupt backlog.json/wip.json is
+# exactly the kind of thing this guard must not paper over.
 json_object_nonempty() {
-  [[ -f "$1" ]] && python3 -c "
+  [[ -f "$1" ]] || return 1
+  python3 -c "
 import json, sys
 try:
     data = json.load(open('$1'))
 except Exception:
-    sys.exit(1)
+    sys.exit(0)
 sys.exit(0 if isinstance(data, dict) and data else 1)
 " 2>/dev/null
 }

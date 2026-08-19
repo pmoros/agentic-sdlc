@@ -172,6 +172,28 @@ class MigrationSafetyGuard(TempRepoCase):
         self.assertIn("migrate-items-v2.sh", r.stderr)
         self.assertFalse(os.path.isdir(os.path.join(ws, "sessions", SID)))  # nothing created
 
+    def test_guard_not_masked_by_a_crash_orphaned_lock_dir(self):
+        # ADH-008 Gate B QA finding: a define-work-item.sh run killed before
+        # its EXIT trap fires can leave an empty <id>.json.lock/ dir in
+        # work/items/ with no real item file. `ls -A` alone would see that
+        # as "populated" and silently skip the guard — exactly the hazard
+        # the guard exists to prevent.
+        ws = make_work_sessions_repo(self.tmp, backlog={"OLD-1": {"title": "t", "status": "grooming"}})
+        items_dir = os.path.join(ws, "work", "items")
+        os.makedirs(os.path.join(items_dir, "SOME-ID.json.lock"))
+        r = self.init(ws)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("migrate-items-v2.sh", r.stderr)
+
+    def test_refuses_on_corrupt_backlog_json_rather_than_silently_proceeding(self):
+        # A file that exists but fails to parse must fail CLOSED (treated
+        # as "might hold real content") — not silently treated as empty.
+        ws = make_work_sessions_repo(self.tmp)
+        with open(os.path.join(ws, "work", "backlog.json"), "w") as fh:
+            fh.write("not valid json {{{")
+        r = self.init(ws)
+        self.assertNotEqual(r.returncode, 0)
+
     def test_refuses_when_wip_has_real_content_and_items_dir_absent(self):
         ws = make_work_sessions_repo(self.tmp, wip={"OLD-1": {"title": "t", "status": "in progress"}})
         r = self.init(ws)
