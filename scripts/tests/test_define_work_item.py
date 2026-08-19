@@ -417,6 +417,48 @@ class EpisodeLifecycle(unittest.TestCase):
         self.assertEqual(item["status"], "done")
 
 
+class Hierarchy(unittest.TestCase):
+    """ADH-012: parent_id lives only on the child (one writer, one
+    direction -- 'children of X' is always a derived read, never stored).
+    define_item() only sets/clears the field here; cross-item validation
+    (self-parent, two-level chains, already-a-parent) is validate_parent_link's
+    job, tested separately in test_validate_parent_link.py since it touches
+    the filesystem and this file stays pure-dicts-only."""
+
+    def _existing(self, **overrides):
+        item = {
+            "id": "ADH-21", "title": "t", "description": "d", "status": "grooming",
+            "current_state": {"description": "d", "is_blocked": False},
+            "history": [], "sessions": [],
+        }
+        item.update(overrides)
+        return item
+
+    def test_parent_id_sets_the_field(self):
+        item = D.define_item(self._existing(), item_id="ADH-21", parent_id="ADH-20", now=NOW)
+        self.assertEqual(item["parent_id"], "ADH-20")
+
+    def test_promote_clears_the_field(self):
+        item = D.define_item(
+            self._existing(parent_id="ADH-20"), item_id="ADH-21", promote=True, now=NOW)
+        self.assertNotIn("parent_id", item)
+
+    def test_parent_id_and_promote_together_raises(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._existing(), item_id="ADH-21",
+                parent_id="ADH-20", promote=True, now=NOW)
+
+    def test_no_parent_or_promote_leaves_field_untouched_on_reshape(self):
+        item = D.define_item(
+            self._existing(parent_id="ADH-20"), item_id="ADH-21", priority="Major", now=NOW)
+        self.assertEqual(item["parent_id"], "ADH-20")
+
+    def test_fresh_item_has_no_parent_id_key_by_default(self):
+        item = D.define_item(None, item_id="ADH-9", description="d", now=NOW)
+        self.assertNotIn("parent_id", item)
+
+
 class LegacyItemsWithoutSessionsField(unittest.TestCase):
     """Real existing items (pre-migration shape) have no `sessions` key."""
 
