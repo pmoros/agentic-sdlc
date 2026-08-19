@@ -274,24 +274,26 @@ trap release_locks EXIT
 # item's own lock is ever acquired -------------------------------------
 if [[ -n "$PARENT" ]]; then
   acquire_lock "$PARENT_LOCK_DIR" "parent-link"
-  python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPT_DIR/lib')
+  SCRIPT_LIB_DIR_ENV="$SCRIPT_DIR/lib" ITEMS_DIR_ENV="$ITEMS_DIR" \
+  ITEM_ID_ENV="$ITEM_ID" PARENT_ENV="$PARENT" python3 -c "
+import os, sys
+sys.path.insert(0, os.environ['SCRIPT_LIB_DIR_ENV'])
 from define_work_item import validate_parent_link
 try:
-    validate_parent_link('$ITEMS_DIR', '$ITEM_ID', '$PARENT')
+    validate_parent_link(os.environ['ITEMS_DIR_ENV'], os.environ['ITEM_ID_ENV'], os.environ['PARENT_ENV'])
 except ValueError as exc:
     print(f'define-work-item: {exc}', file=sys.stderr)
     sys.exit(1)
 " || die "parent link validation failed for $ITEM_ID -> $PARENT"
 elif [[ "$PROMOTE" -eq 1 ]]; then
   acquire_lock "$PARENT_LOCK_DIR" "parent-link"
-  python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPT_DIR/lib')
+  SCRIPT_LIB_DIR_ENV="$SCRIPT_DIR/lib" ITEMS_DIR_ENV="$ITEMS_DIR" \
+  ITEM_ID_ENV="$ITEM_ID" python3 -c "
+import os, sys
+sys.path.insert(0, os.environ['SCRIPT_LIB_DIR_ENV'])
 from define_work_item import validate_promote
 try:
-    validate_promote('$ITEMS_DIR', '$ITEM_ID')
+    validate_promote(os.environ['ITEMS_DIR_ENV'], os.environ['ITEM_ID_ENV'])
 except ValueError as exc:
     print(f'define-work-item: {exc}', file=sys.stderr)
     sys.exit(1)

@@ -112,6 +112,18 @@ class DefineWorkItem(TempRepoCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-21.json")))
 
+    def test_parent_flag_does_not_execute_code_embedded_in_the_value(self):
+        # A `--parent` value crafted to break out of the (now env-var-passed)
+        # python3 -c string context must be treated as inert data, not
+        # executed. Regression test for the injection a fresh-context
+        # reviewer demonstrated when this validation call still
+        # interpolated $PARENT directly into Python source text.
+        marker = os.path.join(self.tmp, "PWNED_PARENT_MARKER")
+        evil_parent = f"ADH100'+__import__('os').system('touch {marker}')+'y"
+        r = self.define("ADH-100", ["--description", "d", "--parent", evil_parent])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(marker))
+
     def test_parent_flag_refuses_a_two_level_chain(self):
         self.define("ADH-20", ["--description", "epic"])
         self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20"])
