@@ -67,8 +67,9 @@ must satisfy (these become the tests, per TDD/BDD).
 
 Write the design to the session's `SPEC.md` (`<work>/sessions/<id>/SPEC.md`) if
 a session exists, or to a standalone doc otherwise. Structure: Context & AC →
-Constraints → Approach (with alternatives) → Interface/Schema → Test scenarios
-→ Open questions / risks.
+Constraints → Approach (with alternatives) → Interface/Schema → Impact analysis
+(`## Impact analysis` — Stakeholders / Components / Data dependencies / Side
+effects, all non-empty) → Test scenarios → Open questions / risks.
 
 ### 5. Review gate
 

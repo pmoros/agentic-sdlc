@@ -19,10 +19,18 @@ Determine the date range and the items in scope.
 
 ## Step 2 — Gather evidence (don't retro from memory)
 
-Pull the facts before facilitating:
-- Items that reached `done` in the period (`wip.json` history, `SESSIONS_STATE.md`).
-- `history` entries across `wip.json` / `backlog.json` in range — what moved,
-  what stalled, what got blocked and for how long.
+`backlog.json`/`wip.json`/`archive.json` are thin generated views
+(`{title, status, priority, scope}` per id only) — none of them carry
+`history`. Pull the facts before facilitating:
+- Items that reached `done` in the period — read `archive.json` for the id
+  list (that's where `done` items land, per `regenerate-views.sh`'s
+  `STATUS_TO_VIEW` mapping — they are not in `wip.json` once done), then each
+  id's own `work/items/<id>.json` for its `history` to confirm the `done`
+  date falls in range.
+- `history` entries in range for items still in `wip.json`/`backlog.json` —
+  read each relevant id's own `work/items/<id>.json` (`history` isn't in the
+  generated views) — what moved, what stalled, what got blocked and for how
+  long.
 - Session `WORKLOG.md` files for the sessions in scope.
 - Prior retros in `<work>/retros/` — check whether earlier action items were
   actually done (unclosed actions are a finding in themselves).
@@ -77,8 +85,9 @@ Write `<work>/retros/<YYYY-MM-DD>-<slug>.md` using this template:
 ## Step 5 — Close the loop into the backlog
 
 For each action item, offer to create a tracking entry so it isn't lost:
-- Add it to `<work>/work/backlog.json` (status `grooming`, an `ADH-NNN` ID or a
-  real ticket), or
+- Create it via `scripts/define-work-item.sh <ADH-NNN-or-ticket-id>
+  --description "..." --status grooming --work-sessions-repo <path>`
+  (`backlog.json` is a generated view, never hand-written), or
 - Create a Jira ticket (guarded write — needs approval).
 
 Confirm the retro path and list the action items with their tracking IDs. Note

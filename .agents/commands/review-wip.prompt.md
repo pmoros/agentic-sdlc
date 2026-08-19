@@ -10,20 +10,24 @@ bottlenecked. `<work>` is the sibling `../work-sessions` repo.
 
 ## Step 1 — Load state
 
-Read `<work>/work/wip.json`, `<work>/SESSIONS_STATE.md` (to correlate items
+Read `<work>/work/wip.json` (a **generated view** — `{title, status,
+priority, scope}` per id only; it does not carry `history`, `current_state`,
+or `roadmap` — see Step 2), `<work>/SESSIONS_STATE.md` (to correlate items
 with active/paused sessions), and the current `WORK_STATE.md`. Compute ages
 against today's date.
 
 ## Step 2 — Per-item read
 
-For each WIP item, capture:
+`wip.json` only gives you the id list, title, status, priority, and scope.
+For each id in it, also read `<work>/work/items/<id>.json` — that's where
+`history`, `current_state`, and `roadmap` actually live — and capture:
 - **Importance** — priority × business impact. Rank the list.
-- **Age & movement** — days since the last `history` entry. Flag **stale**
-  (>7 days no movement).
+- **Age & movement** — days since the last `history` entry (from the item
+  file). Flag **stale** (>7 days no movement).
 - **State** — `in progress` / `on hold` / `in review`. Flag anything **on hold
   or blocked for >14 days**.
-- **Blocker** — if `current_state.is_blocked`, what's it blocked on and who
-  owns the unblock? Is anyone actually chasing it?
+- **Blocker** — if `current_state.is_blocked` (from the item file), what's it
+  blocked on and who owns the unblock? Is anyone actually chasing it?
 - **Session** — is there a live session/worktree, or is it "in progress" on
   paper only?
 
@@ -51,8 +55,10 @@ known. This is the question the user most wants answered — don't hedge.
 ## Step 5 — Update derived state
 
 Refresh the **Blocked items** and **Stale items** sections of `WORK_STATE.md`
-from this pass (keep `current_state.is_blocked` in each item in sync with
-reality — update it if a blocker cleared or appeared, with a `history` entry).
+from this pass. If a blocker cleared or a new one appeared for an item, update
+it via `scripts/define-work-item.sh <id> --current-state "<refreshed status>"
+[--blocked] --record-event "<what changed>" --by "#review-wip"
+--work-sessions-repo <path>` — never hand-edit `work/items/<id>.json`.
 
 ## Step 6 — Readout
 

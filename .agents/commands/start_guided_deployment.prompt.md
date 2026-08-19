@@ -73,6 +73,9 @@ Append to `<work-sessions-repo>/sessions/<session-id>/WORKLOG.md`:
 Update the `DEPLOYMENT.md` frontmatter `Status` to `deployed` or `rolled-back`.
 If a change ticket is linked, remind the user to attach the evidence and add resolution
 notes before transitioning it to Complete (per `.agents/rules/atlassian.instructions.md`).
+**If no change ticket is linked, say so explicitly** — "No change ticket linked; nothing
+to update in Jira" — rather than silently skipping the reminder (ADH-008 non-silence rule,
+same one `#end_work_session.prompt.md`'s close-checkpoint applies to session state).
 
 Tell the user the outcome, where the evidence is, and — on success — the
 validation results that confirm it.

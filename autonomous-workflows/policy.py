@@ -41,11 +41,23 @@ def bash_command_is_gated(command: str) -> bool:
 
 
 def _within(path: str, root: str) -> bool:
-    """True iff `path` resolves to `root` or something beneath it (no escape)."""
+    """True iff `path` resolves to `root` or something beneath it (no escape).
+
+    Uses `realpath`, not just `normpath`: normpath only collapses `..`
+    lexically, so a SYMLINK planted under `root` that points outside it
+    would still read as "within" by string comparison alone even though the
+    real file it resolves to is elsewhere (CWE-22). `realpath` resolves
+    symlinks (falling back to lexical normalization for path segments that
+    don't exist yet, e.g. a file about to be created), closing that gap
+    while still handling '..' traversal and a root itself reached via a
+    symlink (e.g. a worktree path through a symlinked tmp dir on macOS).
+    ADH-008 Gate A finding — see work-sessions/sessions/
+    ADH-008-decouple-control-exec/docs/gate-a-review-r1.md.
+    """
     if not path:
         return False
-    ap = os.path.normpath(path)      # collapses '..' so traversal can't escape
-    ar = os.path.normpath(root)
+    ap = os.path.realpath(path)
+    ar = os.path.realpath(root)
     return ap == ar or ap.startswith(ar + os.sep)
 
 

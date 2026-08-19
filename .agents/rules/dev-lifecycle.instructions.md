@@ -17,7 +17,7 @@ Final Review, guided deployments). Only two points require a human: **Gate A
 
 | # | Stage | Entry | Exit / gate | Tier |
 |---|---|---|---|---|
-| 0 | **Planning & Decomposition** | a `ready` item (in `work/wip.json`) | split into sequenced sub-tasks; deps mapped | planner |
+| 0 | **Planning & Decomposition** | a `ready` item (in `work/backlog.json`) | split into sequenced sub-tasks; deps mapped | planner |
 | 1 | **Analysis & Discovery** | sub-task picked | problem + **systems/dependencies + real current state** understood; not blocked | planner (+ MCP/CLI reads) |
 | 2 | **Design** | discovery done | interface/contract/approach defined (`SPEC.md`) | planner |
 | — | **🚪 Gate A — Design Review** | a design exists | **reviewer-agent critique (fresh context) → human approves** before any code | reviewer → human |

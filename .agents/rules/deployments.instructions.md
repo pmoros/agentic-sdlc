@@ -19,7 +19,7 @@ deployments** (dev-account experiments, staging pushes, test-account CDK
 apps) so the session's `deployments/` folder is a complete record of what was
 deployed and how, regardless of environment — not just production. This is
 encouraged practice, not a hard gate: a non-prod, Low-blast-radius deploy can
-fill out the five sections briefly rather than skipping the definition
+fill out the six sections briefly rather than skipping the definition
 entirely.
 
 This rule operationalizes the three-phase write protocol and blast-radius
@@ -41,21 +41,22 @@ definition doesn't block execution the way it does for production.
 **Not applicable** to localhost/dev-sandbox work (see Flex Mode) or read-only
 queries — there's no deployment to record.
 
-## The five mandatory artifacts
+## The six mandatory artifacts
 
-Every deployment definition captures all five. They map onto the
+Every deployment definition captures all six. They map onto the
 change-management ticket template in `.agents/rules/atlassian.instructions.md`,
 so a definition can seed a change-management ticket directly.
 
 | Artifact | Must answer | Maps to change-ticket section |
 |---|---|---|
 | **1. Risk analysis & blast radius** | What changes, what does NOT, who/what is affected, blast radius (Low/Medium/High/Critical per Operational Safety), and — for High/Critical — recovery time estimate | Description |
-| **2. Pre-flight checks** | Concrete read-only checks proving it's safe to start: correct account/region/profile, dry-run/plan output reviewed, no active locks or in-flight deploys, dependencies healthy, backup taken if needed | Implementation Details (preconditions) |
-| **3. Deployment steps** | The exact ordered commands/actions, each with the environment inputs it consumes (profile, environment ID, branch/version selector, etc.) and expected output | Implementation Details |
-| **4. Validation steps** | Post-change checks proving success: specific commands/observables (curl, dig, CloudWatch metric, record read-back) with expected results — not "looks fine" | Verification Details |
-| **5. Rollback steps** | The exact ordered actions to revert, when to trigger them, and the recovery-time estimate | Rollback Details |
+| **2. Impact analysis** | A `## Impact analysis` subsection with all four fields non-empty: **Stakeholders** (who to notify or get approval from), **Components** (services/repos/modules touched), **Data dependencies** (schemas/datastores/queues read or written), **Side effects** (anything outside the stated change surface — cost, other pipelines, shared infra) | Description |
+| **3. Pre-flight checks** | Concrete read-only checks proving it's safe to start: correct account/region/profile, dry-run/plan output reviewed, no active locks or in-flight deploys, dependencies healthy, backup taken if needed | Implementation Details (preconditions) |
+| **4. Deployment steps** | The exact ordered commands/actions, each with the environment inputs it consumes (profile, environment ID, branch/version selector, etc.) and expected output | Implementation Details |
+| **5. Validation steps** | Post-change checks proving success: specific commands/observables (curl, dig, CloudWatch metric, record read-back) with expected results — not "looks fine" | Verification Details |
+| **6. Rollback steps** | The exact ordered actions to revert, when to trigger them, and the recovery-time estimate | Rollback Details |
 
-A definition with any of the five empty or left as a TODO is **not valid** and
+A definition with any of the six empty or left as a TODO is **not valid** and
 must not be executed.
 
 ## Workflow
@@ -64,7 +65,7 @@ must not be executed.
    `sessions/<id>/deployments/<name>/DEPLOYMENT.md` from the template.
 2. **Review** it (the human owner reads and approves the plan as written).
 3. **Execute** with `#start_guided_deployment.prompt.md` — it refuses to start
-   if any of the five artifacts is empty, then walks pre-flight → deployment →
+   if any of the six artifacts is empty, then walks pre-flight → deployment →
    validation with an approval gate before the first production-mutating step,
    recording evidence under `deployments/<name>/evidence/`. On any failure it
    surfaces the rollback steps immediately.

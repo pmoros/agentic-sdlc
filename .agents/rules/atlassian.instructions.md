@@ -27,15 +27,26 @@ server — see `AGENTS.md` § MCP Setup).
 
 ### Confluence spaces
 
+Cross-org, ask-at-session-start/close candidates (ADH-008 Phase 6 — see the
+`start-work-session` skill and `#end_work_session.prompt.md`'s Confluence
+steps):
+
 | Space | Key | Confluence Instance |
 |---|---|---|
-| Software Development | `TBD` — confirm on first connect | `forgestop.atlassian.net` |
+| Software Development | `SD` | `forgestop.atlassian.net` |
+| AI & Operation Standards & Guides | `AASG` | `forgestop.atlassian.net` |
+| Product | `Product` | `forgestop.atlassian.net` |
+| Operations | `BO` | `forgestop.atlassian.net` |
 
-> **Partially seeded.** Names + site are real; keys, issue types, custom
-> fields, and workflow states are still `TBD` — capture them on the first
-> successful MCP read (a project/space lookup returns the key), then fill the
-> per-project section below and remove the `TBD` markers. Add a row per Jira
-> project / Confluence space this framework is used against.
+**Other spaces** — client-specific knowledge bases, offer when the session's
+goal names that client (several map 1:1 to the Jira "Other projects" list
+above): `IFA` (IFA Celtics), `PIC` (Piccadily), `OCU` (Ocusoft), `NEO`
+(Neolpharma), `MAN` (Mankind Pharma), `JNX` (JNX Sports), `DIA` (Diageo
+India), `CSK` (Customer Support Knowledge).
+
+> **Confluence fully seeded** (2026-08-18, via `getConfluenceSpaces`). Jira
+> project keys/issue types/custom fields below are still `TBD` — capture on
+> first connect, same procedure.
 
 ---
 
@@ -44,6 +55,29 @@ server — see `AGENTS.md` § MCP Setup).
 All content written to Jira and Confluence — summaries, descriptions,
 comments, resolution notes, attachments — must be in **English**, regardless
 of the language used in conversation with the user.
+
+---
+
+## Shared — Confluence Wiki Discovery (CQL)
+
+Used by `start-work-session`'s and `#end_work_session.prompt.md`'s
+Confluence steps (ADH-008 Phase 6) — read-only, autonomous, never a write.
+
+- **Scope to the space(s) the user named** from the table above (or an
+  "Other spaces" one). Never search unscoped across every space — too noisy,
+  and pulls in personal/client spaces the user didn't ask about.
+- **Query shape:** `space in (<key1>, <key2>) AND type = page AND text ~
+  "<keyword1> <keyword2> ..."`. Keywords: the ticket key if there is one
+  (search it standalone too — `text ~ "PROJ-1234"` — since a linked ticket
+  key is a stronger signal than goal-word overlap), plus 2-4 significant
+  words from the session goal (drop stopwords/type-prefixes like `[feat]`).
+- **Surface candidates as title + link**, ranked as the tool returns them
+  (relevance-ordered); don't re-rank. Cap what you show at a reasonable
+  number (~5-8) — don't dump every match.
+- **The user decides what's relevant**, every time — never auto-link a page
+  without it being explicitly picked, even a single unambiguous-looking
+  result.
+- **No space named ⇒ no search.** Don't fall back to guessing a space.
 
 ---
 

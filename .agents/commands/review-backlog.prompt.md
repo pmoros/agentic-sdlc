@@ -11,8 +11,14 @@ Assess whether the backlog is on track and regenerate the derived snapshot in
 
 ## Step 1 — Load state
 
-Read `backlog.json`, `wip.json`, `scratchpad.json`, `INBOX.md`, and the current
+Read `backlog.json`, `wip.json` (generated views over `work/items/*.json` —
+read-only, `{title, status, priority, scope}` per id only; see Step 2 for how
+writes actually happen), `scratchpad.json`, `INBOX.md`, and the current
 `WORK_STATE.md`. Compute ages against today's date (provided in context).
+
+Neither generated view carries `roadmap`, `history`, or `current_state` — for
+Step 3's roadmap-gap and blocked-item analysis, read each relevant id's own
+`work/items/<id>.json`.
 
 ## Step 2 — Optional Jira sync
 
@@ -20,8 +26,11 @@ Ask (or honor an explicit `--sync` argument): "Sync from Jira first?" If yes,
 load `.agents/rules/atlassian.instructions.md` for the field/status contract,
 then query `assignee = currentUser() AND resolution = Unresolved` and
 reconcile:
-- **New in Jira, not tracked** → add to `backlog.json` as `ready` (or match the
-  live Jira status), with a `history` entry noting the sync.
+- **New in Jira, not tracked** → create it via `scripts/define-work-item.sh
+  <id> --description "..." --status ready --ticket <url>
+  --record-event "Synced from Jira" --by "#review-backlog"
+  --work-sessions-repo <path>` (or match the live Jira status if not
+  actually ready). Never hand-write `backlog.json` — it's regenerated.
 - **Tracked status disagrees with Jira** → record under "Status mismatches" in
   `WORK_STATE.md`. Do **not** auto-correct — a human picks the accurate one.
 - **Done/closed in Jira but still open here** → flag for closing; don't delete
@@ -30,23 +39,28 @@ reconcile:
 ## Step 3 — Health analysis
 
 Evaluate against the heuristics (state the thresholds you used):
-- **Stale grooming** — items in `grooming` for more than 30 days.
+- **Stale grooming** — items in `grooming` for more than 30 days, per each
+  item's own `work/items/<id>.json` `history` (age isn't in `backlog.json`).
 - **Outstanding/aging** — `ready` items that have sat un-picked-up a long time
-  (candidates to drop, re-prioritize, or schedule).
-- **Roadmap gaps** — items whose `roadmap` is empty or whose `target_date` is
-  `TBD` (no dated commitment) or already in the past (overdue).
+  (candidates to drop, re-prioritize, or schedule), same per-item `history`
+  read.
+- **Roadmap gaps** — from each item's own `work/items/<id>.json` (not
+  `backlog.json`, which has no `roadmap` field): items whose `roadmap` is
+  empty or whose `target_date` is `TBD` (no dated commitment) or already in
+  the past (overdue).
 - **Unshaped load** — count of untriaged `INBOX.md` lines (pending
   `#triage-inbox`).
-- **Priority/weight sanity** — any `L`/`XL` items that should be broken down;
+- **Priority/scope sanity** — any `L`/`XL` items that should be broken down;
   any high-priority items still stuck in `grooming`.
 
 ## Step 4 — Regenerate WORK_STATE.md
 
 Rewrite `WORK_STATE.md` preserving its section structure:
 - **Snapshot** counts (backlog / WIP / scratchpad / untriaged inbox).
-- **Stale items**, **Blocked items** (derived from `current_state.is_blocked`),
-  **Status mismatches**, **Next actions** (pulled from each item's `roadmap`,
-  nearest dated `target_date` first).
+- **Stale items**, **Blocked items** (derived from each item's own
+  `current_state.is_blocked` — read from `work/items/<id>.json`, not the
+  generated view), **Status mismatches**, **Next actions** (pulled from each
+  item's own `roadmap`, nearest dated `target_date` first).
 - Keep it a *snapshot* — the JSON files remain the source of truth. Note the
   date of this refresh.
 

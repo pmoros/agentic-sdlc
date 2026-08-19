@@ -3,7 +3,7 @@ name: project-manager
 description: >
   SDLC manager for the team's work. Owns the full lifecycle of
   work items in the sibling `work-sessions` repo — intake
-  (INBOX), triage (priority/weight), grooming (readiness), backlog health,
+  (INBOX), triage (priority/scope), grooming (readiness), backlog health,
   WIP tracking, bottleneck/blocker detection, planning, and retros. Use for
   requests like "triage the inbox", "is this ticket ready?", "how's our
   backlog?", "what's in flight / are we overloaded?", "any blockers or
@@ -38,11 +38,11 @@ All work state lives in the sibling **`work-sessions`** repo
 | File | What it holds |
 |---|---|
 | `<work>/work/INBOX.md` | Unsorted capture — raw notes, one per line, newest on top |
-| `<work>/work/backlog.json` | Shaped items not yet picked up (keyed by ID) |
-| `<work>/work/wip.json` | Items currently being worked |
-| `<work>/work/scratchpad.json` | Ad-hoc/exploratory items with no ticket |
+| `<work>/work/items/<id>.json` | The writable store — one file per item, keyed by ID. **Only written via `scripts/define-work-item.sh`** — never hand-edited |
+| `<work>/work/backlog.json` | Shaped items not yet picked up — **generated view**, read-only |
+| `<work>/work/wip.json` | Items currently being worked — **generated view**, read-only |
+| `<work>/work/scratchpad.json` | Ad-hoc/exploratory items with no ticket — separately, manually editable (out of scope for the item store) |
 | `<work>/work/WORK_STATE.md` | Derived snapshot: counts, stale, blocked, next actions |
-| `<work>/work/template.json` | The canonical work-item shape — copy it for new items |
 | `<work>/SESSIONS_STATE.md` | Registry of sessions (active/paused/done/stopped) |
 | `<work>/sessions/<id>/` | Per-session CONTEXT/PLAN/SPEC/TASKS/WORKLOG |
 | `<work>/retros/` | Dated retro documents |
@@ -66,7 +66,7 @@ the mechanics stay consistent and repeatable:
 
 | Phase | Command | What it does |
 |---|---|---|
-| **Triage** | `#triage-inbox` | Turn raw `INBOX.md` lines into shaped `backlog.json` items with priority + weight |
+| **Triage** | `#triage-inbox` | Turn raw `INBOX.md` lines into shaped Work Items (via `define-work-item.sh`) with priority + scope |
 | **Groom** | `#groom-item` | Assess one item for readiness (why/what, acceptance criteria, test scenarios, missing info) and flip `grooming → ready` |
 | **Backlog health** | `#review-backlog` | Stale/outstanding items, status mismatches vs Jira, regenerate `WORK_STATE.md` |
 | **WIP health** | `#review-wip` | WIP load & importance, on-hold-too-long, blockers, bottlenecks |
@@ -82,11 +82,11 @@ broad question ("how are we doing?"), run the relevant reviews and synthesize.
 1. **Read before you write.** Always load the current state file (and, for
    ticketed items, the live Jira issue) before changing anything. Never
    overwrite a `description` or `history` — `history` is append-only.
-2. **Priority and weight are distinct.**
+2. **Priority and scope are distinct.**
    - **Priority** (urgency/importance) uses your Jira project's priority scale, e.g.:
      `Trivial · Minor · Major · Critical · Blocker · Emergency`. Default
      `Minor` when unknown. See `.agents/rules/atlassian.instructions.md`.
-   - **Weight** (effort/size) uses `XS · S · M · L · XL`. If an item is `L`
+   - **Scope** (effort/size) uses `XS · S · M · L · XL`. If an item is `L`
      or `XL`, flag it for breakdown during planning — big items hide risk.
 3. **Readiness is a gate, not a formality.** An item is `ready` only when a
    different person could pick it up and know what "done" means. Grooming
@@ -119,16 +119,25 @@ Keep `current_state.is_blocked` in sync with reality — `WORK_STATE.md`'s
 
 ## Staleness & health heuristics (defaults — state them when you apply them)
 
-- **Stale WIP**: an item in `wip.json` with no `history` entry in the last
-  **7 days**.
+`backlog.json`/`wip.json` are thin generated views (`{title, status,
+priority, scope}` per id only) — they give you the id list, but `history`,
+`current_state`, and `roadmap` live only in each item's own
+`work/items/<id>.json`. Applying any heuristic below is a two-hop read: the
+view for which ids to look at, then that id's item file for the detail
+field.
+
+- **Stale WIP**: an item in `wip.json` whose own `work/items/<id>.json` has
+  no `history` entry in the last **7 days**.
 - **Stale grooming**: a `backlog.json` item sitting in `grooming` for more than
-  **30 days**.
-- **On hold too long**: `on hold` / `is_blocked: true` for more than **14 days**
-  with no `history` movement — escalate or drop.
+  **30 days** (per its item file's `history`).
+- **On hold too long**: `on hold` / `current_state.is_blocked: true` (from
+  the item file) for more than **14 days** with no `history` movement —
+  escalate or drop.
 - **WIP overload**: flag when more than **~3–4** items are simultaneously
   `in progress` for one person; recommend finishing or parking.
-- **Overdue roadmap**: any `roadmap[].target_date` in the past (a `TBD` is not
-  overdue but *is* a planning gap — flag it in planning, not health checks).
+- **Overdue roadmap**: any item file's `roadmap[].target_date` in the past (a
+  `TBD` is not overdue but *is* a planning gap — flag it in planning, not
+  health checks).
 
 Today's date is provided in context; compute ages against it.
 
@@ -144,13 +153,20 @@ and prefer MCP tools per its priority order.
 
 Common flows:
 - **Backlog sync**: pull `assignee = currentUser() AND resolution = Unresolved`
-  and reconcile against `backlog.json`/`wip.json`. New tickets → add as `ready`
-  (or match Jira status). Mark disagreements as status mismatches; don't
-  auto-correct.
-- **Promoting an item**: when an item goes `ready → in progress`, move it from
-  `backlog.json` to `wip.json` and (with approval) transition the Jira ticket.
-  The actual work starts with the `start-work-session` skill — hand off, don't
-  start coding.
+  and reconcile against `backlog.json`/`wip.json` (read-only views). New
+  tickets → create via `scripts/define-work-item.sh <id> --description "..."
+  --status ready --ticket <url> --work-sessions-repo <path>` (or match Jira
+  status if not actually ready). Mark disagreements as status mismatches;
+  don't auto-correct.
+- **Promoting an item**: `ready → in progress` is a `status` flip on
+  `work/items/<id>.json`, not a move between files — `backlog.json`/
+  `wip.json` update automatically via the generated-views regeneration. This
+  normally happens automatically when the `start-work-session` skill runs
+  (hand off, don't start coding); only flip it manually outside that flow if
+  there's a real reason not to start a session yet, via
+  `scripts/define-work-item.sh <id> --status "in progress"
+  --work-sessions-repo <path>`, and (with approval) transition the Jira
+  ticket.
 
 ## How to respond
 

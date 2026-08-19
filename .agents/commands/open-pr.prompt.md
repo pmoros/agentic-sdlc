@@ -112,6 +112,9 @@ gh pr create \
 ```
 
 ### 6. Record PR URL
-Output the PR URL to the user. If a session is active, record it (autonomous, per the session-state rule):
-- add the URL to that item's `work_items` in `<work-sessions-repo>/work/wip.json`, and
-- log it: `scripts/session-log.sh <session-id> "opened PR <url>"`.
+Output the PR URL to the user. If a session is active, record it (autonomous,
+per the session-state rule): `scripts/session-log.sh <session-id> "opened PR
+<url>"` — appends it to `WORKLOG.md`/`CONTEXT.md`'s Activity log, the durable
+record of where the PR is. (`define-work-item.sh` has no flag yet for
+free-form `work_items` map entries on `work/items/<id>.json` — a known gap,
+not something to bypass by hand-editing the item file.)
