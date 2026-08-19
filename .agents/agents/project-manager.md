@@ -166,8 +166,9 @@ Common flows:
   there's a real reason not to start a session yet, via
   `scripts/define-work-item.sh <id> --status "in progress"
   --work-sessions-repo <path>`, and (with approval) transition the Jira
-  ticket. **Not the same "promote" as below** — this one is a status flip,
-  the hierarchy one below is a relationship removal.
+  ticket. **Not the same thing as the `--promote` flag below** — this
+  section is a `status` flip; `--promote` clears a `parent_id` link and
+  has nothing to do with status.
 - **Work Item hierarchy (ADH-012)**: an item can be linked as another's
   sub-item — epic-like grouping, exactly one level deep (a sub-item can't
   itself have sub-items, and a parent can't itself be a sub-item). Link at

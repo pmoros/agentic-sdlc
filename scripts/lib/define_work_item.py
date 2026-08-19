@@ -143,7 +143,7 @@ def validate_parent_link(items_dir, item_id, parent_id):
     if parent_id == item_id:
         raise ValueError(f"an item cannot be its own parent: {item_id!r}")
 
-    parent_item = _load(os.path.join(items_dir, f"{parent_id}.json"))
+    parent_item = _load_or_raise_precise(items_dir, parent_id)
     if parent_item is None:
         raise ValueError(
             f"no such item: {parent_id!r} — cannot link {item_id!r} to a nonexistent parent")
@@ -153,19 +153,41 @@ def validate_parent_link(items_dir, item_id, parent_id):
             "this system supports exactly one level of nesting, so it can't also become one")
 
     if os.path.isdir(items_dir):
-        for fname in os.listdir(items_dir):
+        # Lock directories (work/items/.parent-link.lock/, <id>.json.lock/)
+        # never match `.endswith(".json")` -- excluded by the naming
+        # scheme, not a separate guard; noted here so a future rename of
+        # either doesn't silently reintroduce a false "item" read.
+        for fname in sorted(os.listdir(items_dir)):
             if not fname.endswith(".json"):
                 continue
             other_id = fname[:-len(".json")]
             if other_id in (item_id, parent_id):
                 continue
-            other = _load(os.path.join(items_dir, fname))
+            other = _load_or_raise_precise(items_dir, other_id)
             if other and other.get("parent_id") == item_id:
                 raise ValueError(
                     f"{item_id!r} already has sub-items of its own (e.g. {other_id!r}) — "
                     "can't also become a sub-item; this system supports exactly one level of nesting")
 
     return None
+
+
+def _load_or_raise_precise(items_dir, item_id):
+    """Like :func:`_load`, but a corrupt file gets a precise, actionable
+    reason naming exactly which file is bad, instead of a raw
+    ``JSONDecodeError`` traceback — validate_parent_link's directory scan
+    can hit ANY sibling item's file, not just the one the caller named, so
+    a generic parse error is not the "precise reason" this function's
+    callers promise. Still fails loud (per this repo's doctrine), not a
+    silent skip — a corrupt item file is real data damage worth surfacing,
+    not something to paper over."""
+    path = os.path.join(items_dir, f"{item_id}.json")
+    try:
+        return _load(path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"cannot validate the parent link: {path!r} is not valid JSON ({exc}) "
+            "— fix or remove it before linking items") from exc
 
 
 def validate_promote(items_dir, item_id):

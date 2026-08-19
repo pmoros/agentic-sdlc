@@ -74,6 +74,18 @@ class ValidateParentLink(unittest.TestCase):
         self.write("ADH-20")
         self.assertIsNone(D.validate_parent_link(self.items_dir, "ADH-brand-new", "ADH-20"))
 
+    def test_corrupt_sibling_file_gets_a_precise_reason_not_a_raw_traceback(self):
+        # Gate B: a corrupt/non-JSON sibling anywhere in items_dir must not
+        # surface as an opaque JSONDecodeError -- name exactly which file
+        # is bad and what to do about it (still fails loud, doesn't skip).
+        self.write("ADH-20")
+        self.write("ADH-99")
+        with open(os.path.join(self.items_dir, "ADH-corrupt.json"), "w") as fh:
+            fh.write("{not valid json")
+        with self.assertRaises(ValueError) as ctx:
+            D.validate_parent_link(self.items_dir, "ADH-99", "ADH-20")
+        self.assertIn("ADH-corrupt.json", str(ctx.exception))
+
 
 class ValidatePromote(unittest.TestCase):
     def setUp(self):

@@ -142,6 +142,20 @@ class DefineWorkItem(TempRepoCase):
         self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20"])
         self.assertFalse(os.path.isdir(os.path.join(self.items_dir, ".parent-link.lock")))
 
+    def test_parent_link_releases_the_shared_lock_after_validation_failure(self):
+        # The lock is acquired BEFORE validation runs -- a refusal must
+        # still release it, or every subsequent --parent/--promote call
+        # would hang until the stale-lock timeout.
+        r = self.define("ADH-20", ["--description", "d", "--parent", "ADH-20"])  # self-parent
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.isdir(os.path.join(self.items_dir, ".parent-link.lock")))
+
+    def test_promote_releases_the_shared_lock_after_validation_failure(self):
+        self.define("ADH-21", ["--description", "d"])  # no parent to clear
+        r = self.define("ADH-21", ["--promote"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.isdir(os.path.join(self.items_dir, ".parent-link.lock")))
+
     def test_concurrent_parent_links_on_different_items_never_produce_a_multi_level_chain(self):
         # The exact race Gate A round 1 traced by hand: item P is
         # top-level, X and Y are top-level. Launched concurrently:
