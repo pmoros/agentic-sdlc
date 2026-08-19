@@ -6,7 +6,6 @@
 | **Date** | 2026-08-18 |
 | **Deciders** | Paul Moros |
 | **Tags** | work-sessions, concurrency, git-worktree, session-state, data-integrity |
-| **Tracking** | IO-254 (parent) · IO-255 · IO-256 · IO-257 · IO-258 |
 
 ## Context
 
@@ -34,14 +33,13 @@ lifecycle prompts):
    harmless) `.code-workspace`. Everything else a session writes lives under its
    own disjoint `sessions/<id>/` path.
 
-The failure this produces was observed on 2026-08-16 while closing session
-IO-253. That session's registration commit was made on whatever branch was
-checked out; another agent (an unrelated ADH-009 PR merge) then moved the shared
-checkout to `main`. The result: IO-253's commit was left on **no branch at all**
-(reachable only via reflog, garbage-collection-eligible) and its files vanished
-from the working tree — `main` had zero trace of the session. The same class of
-race also explains why `main`'s `SESSIONS_STATE.md` lags reality, missing rows
-for several genuinely-active sessions.
+This failure is not hypothetical — it has been observed in practice. A session's
+registration commit is made on whatever branch is checked out; another agent then
+switches or merges that shared checkout to a different branch. The first session's
+commit is left on **no branch at all** (reachable only via reflog,
+garbage-collection-eligible) and its files vanish from the working tree — the
+mainline ends up with zero trace of the session. The same class of race also
+explains why the registry drifts, missing rows for genuinely-active sessions.
 
 Root cause: **a single shared checkout + hand-edited shared files + no per-session
 commit target.** Any fix must let concurrent sessions persist their state
@@ -53,8 +51,8 @@ on the same lines of the same shared files.
 Adopt **per-session isolation** of `work-sessions` state, built from three
 coupled parts. The parts are coupled deliberately: per-session branches *alone*
 make the problem worse, because committing a session branch from the single
-shared checkout forces the `git checkout` that orphaned IO-253 in the first
-place. Branches are only safe when paired with per-session worktrees **and** a
+shared checkout forces the very `git checkout` that strands another session's
+in-flight commit. Branches are only safe when paired with per-session worktrees **and** a
 guarantee that session commits never touch shared files.
 
 ### Part 1 — One `work-sessions` worktree per session, on `session/<id>`
@@ -124,9 +122,8 @@ Because session branches are path-disjoint:
    from current `SESSIONS_STATE.md` rows.
 2. Convert `SESSIONS_STATE.md` / `work/wip.json` to generated (mark them; add the
    script) and reconcile `main` so it lists every currently-active session.
-3. Recover the records already orphaned by this bug (e.g. branch
-   `chore/IO-253-session-record`) by merging their `sessions/<id>/` folders into
-   `main`.
+3. Recover any records already orphaned by this bug by merging their
+   `sessions/<id>/` folders into the mainline.
 4. Add the "never checkout in `work-sessions`" rule to `AGENTS.md` and update the
    lifecycle prompts.
 
@@ -161,7 +158,7 @@ Because session branches are path-disjoint:
   project-manager flows that scan the registry need auditing for this.
 - **Real implementation surface**: `init-session.sh`, four lifecycle prompts, a
   new generator script + tests, `AGENTS.md`, and a one-time migration — sequenced
-  across IO-255…IO-258. A partial rollout (e.g. worktrees without the derived
+  in phases. A partial rollout (e.g. worktrees without the derived
   registry) would reintroduce shared-file conflicts, so the phases must land in
   order.
 
