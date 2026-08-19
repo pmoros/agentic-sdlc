@@ -194,6 +194,22 @@ class ReopenItem(TempRepoCase):
             *extra,
         ], check=False)
 
+    def test_real_invocation_shape_with_no_positional_arg_at_all(self):
+        # Every other test in this class passes a decoy positional arg for
+        # convenience. The actual documented/production invocation
+        # (SPEC.md §4, initialize_work_session_folder.prompt.md) never
+        # passes one: `init-session.sh --reopen-item <item-id> --goal
+        # "<goal>"` -- confirm that exact shape works end to end.
+        self.write_populated_item()
+        r = run([
+            SCRIPT, "--reopen-item", self.ITEM_ID,
+            "--goal", "Pick this item back up",
+            "--work-sessions-repo", self.ws,
+            "--agentic-sdlc-repo", self.agentic,
+        ], check=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isdir(os.path.join(self.ws, "sessions", f"{self.ITEM_ID}--e2")))
+
     def test_refuses_when_item_file_does_not_exist(self):
         r = self.reopen()
         self.assertNotEqual(r.returncode, 0)

@@ -119,11 +119,11 @@ picking it back up is a **reopen**, not a fresh session start:
 - `SESSIONS_STATE.md` has one row per episode (an episode already gets its
   own folder), joined by an `Item` column — `= Session ID` for an ordinary
   session, `= <item-id>` for a `--eN` row.
-- `sessions[]` stays empty for an item that's only ever had one episode —
-  no migration was needed for the 21 items ADH-008 originally migrated
-  (12 of them already got a real episode-1 entry from that migration
-  itself); the first reopen lazily backfills episode 1 from `history` only
-  if it's genuinely missing.
+- `sessions[]` needed no migration for the 21 items ADH-008 originally
+  migrated: 12 of them already got a real episode-1 entry from that
+  migration itself, and the other 9 (never-started backlog items) simply
+  stay structurally empty until their first reopen, which lazily backfills
+  episode 1 from `history` at that point.
 
 See `work-sessions/sessions/ADH-011-episode-identity/SPEC.md` for the full
 design and the acceptance scenarios worked through against real live items.

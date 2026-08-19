@@ -36,6 +36,7 @@ import os
 import sys
 
 VALID_STATUSES = {"grooming", "ready", "in progress", "on hold", "in review", "done"}
+VALID_EPISODE_OUTCOMES = {"done", "stopped", "paused"}
 VALID_SCOPES = {"XS", "S", "M", "L", "XL"}
 
 
@@ -250,10 +251,18 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
         session_id, outcome = close_episode
         if not outcome:
             raise ValueError("close_episode requires a non-empty outcome")
+        if outcome not in VALID_EPISODE_OUTCOMES:
+            raise ValueError(
+                f"invalid episode outcome: {outcome!r} (expected one of {sorted(VALID_EPISODE_OUTCOMES)})")
         sessions = _ensure_episode_1(item, now)
         match = next((e for e in sessions if e["episode_id"] == session_id), None)
         if match is None:
             raise ValueError(f"no episode found for session id: {session_id!r}")
+        if match is not sessions[-1]:
+            raise ValueError(
+                f"cannot close {session_id!r}: it is not the most recent episode "
+                f"({sessions[-1]['episode_id']!r} is — closing an older episode out of "
+                "order would leave the item's status inconsistent with its actual last episode)")
         match["closed"] = now
         match["outcome"] = outcome
         item["sessions"] = sessions

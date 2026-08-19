@@ -368,6 +368,33 @@ class EpisodeLifecycle(unittest.TestCase):
                 self._populated(status="in progress", closed=None), item_id="ADH-4",
                 close_episode=("ADH-4--e7", "done"), now=NOW)
 
+    def test_close_episode_rejects_unknown_outcome(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._populated(status="in progress", closed=None), item_id="ADH-4",
+                close_episode=("ADH-4", "dun"), now=NOW)
+
+    def test_close_episode_every_documented_outcome_is_accepted(self):
+        for outcome in ("done", "stopped", "paused"):
+            item = D.define_item(
+                self._populated(status="in progress", closed=None), item_id="ADH-4",
+                close_episode=("ADH-4", outcome), now=NOW)
+            self.assertEqual(item["sessions"][0]["outcome"], outcome)
+
+    def test_close_episode_refuses_to_close_an_older_episode_out_of_order(self):
+        existing = self._populated(status="in progress", closed="2026-08-05T00:00:00Z")
+        existing["sessions"][0]["outcome"] = "done"
+        existing["sessions"].append({
+            "episode_id": "ADH-4--e2", "episode_number": 2,
+            "folder": "sessions/ADH-4--e2", "opened": "2026-08-10T00:00:00Z",
+            "closed": None, "outcome": None,
+        })
+        # Episode 2 is the open one -- closing episode 1 (already closed,
+        # and no longer the last episode) must be refused, not silently
+        # re-applied.
+        with self.assertRaises(ValueError):
+            D.define_item(existing, item_id="ADH-4", close_episode=("ADH-4", "done"), now=NOW)
+
     def test_close_episode_requires_outcome(self):
         with self.assertRaises(ValueError):
             D.define_item(
