@@ -38,11 +38,11 @@ All work state lives in the sibling **`work-sessions`** repo
 | File | What it holds |
 |---|---|
 | `<work>/work/INBOX.md` | Unsorted capture — raw notes, one per line, newest on top |
-| `<work>/work/backlog.json` | Shaped items not yet picked up (keyed by ID) |
-| `<work>/work/wip.json` | Items currently being worked |
-| `<work>/work/scratchpad.json` | Ad-hoc/exploratory items with no ticket |
+| `<work>/work/items/<id>.json` | The writable store — one file per item, keyed by ID. **Only written via `scripts/define-work-item.sh`** — never hand-edited |
+| `<work>/work/backlog.json` | Shaped items not yet picked up — **generated view**, read-only |
+| `<work>/work/wip.json` | Items currently being worked — **generated view**, read-only |
+| `<work>/work/scratchpad.json` | Ad-hoc/exploratory items with no ticket — separately, manually editable (out of scope for the item store) |
 | `<work>/work/WORK_STATE.md` | Derived snapshot: counts, stale, blocked, next actions |
-| `<work>/work/template.json` | The canonical work-item shape — copy it for new items |
 | `<work>/SESSIONS_STATE.md` | Registry of sessions (active/paused/done/stopped) |
 | `<work>/sessions/<id>/` | Per-session CONTEXT/PLAN/SPEC/TASKS/WORKLOG |
 | `<work>/retros/` | Dated retro documents |
@@ -144,13 +144,20 @@ and prefer MCP tools per its priority order.
 
 Common flows:
 - **Backlog sync**: pull `assignee = currentUser() AND resolution = Unresolved`
-  and reconcile against `backlog.json`/`wip.json`. New tickets → add as `ready`
-  (or match Jira status). Mark disagreements as status mismatches; don't
-  auto-correct.
-- **Promoting an item**: when an item goes `ready → in progress`, move it from
-  `backlog.json` to `wip.json` and (with approval) transition the Jira ticket.
-  The actual work starts with the `start-work-session` skill — hand off, don't
-  start coding.
+  and reconcile against `backlog.json`/`wip.json` (read-only views). New
+  tickets → create via `scripts/define-work-item.sh <id> --description "..."
+  --status ready --ticket <url> --work-sessions-repo <path>` (or match Jira
+  status if not actually ready). Mark disagreements as status mismatches;
+  don't auto-correct.
+- **Promoting an item**: `ready → in progress` is a `status` flip on
+  `work/items/<id>.json`, not a move between files — `backlog.json`/
+  `wip.json` update automatically via the generated-views regeneration. This
+  normally happens automatically when the `start-work-session` skill runs
+  (hand off, don't start coding); only flip it manually outside that flow if
+  there's a real reason not to start a session yet, via
+  `scripts/define-work-item.sh <id> --status "in progress"
+  --work-sessions-repo <path>`, and (with approval) transition the Jira
+  ticket.
 
 ## How to respond
 

@@ -78,12 +78,27 @@ Concretely, for whoever implements ADR-0002 next:
    `regenerate-views.sh` (or a renamed successor), scanning
    `work/items/*.json` for both outputs. `work/backlog.json` stays
    untouched by this (ADR-0002 Neutral consequence, unaffected either way).
-3. **Layer, don't replace, the concurrency mechanisms.** ADR-0002's
-   per-session `work-sessions` worktree (Part 1) becomes the place a
-   session's own `work/items/<id>.json` writes happen from — the per-item
-   `mkdir`-lock (ADH-008) stays in place underneath it as defense in depth
-   for the case two worktrees' writers still race the same item at a
-   merge/regenerate step. Neither mechanism is redundant once combined.
+3. **The two concurrency mechanisms protect different things — neither
+   substitutes for the other, and combining them does NOT close every gap.**
+   (Corrected from this ADR's first draft, which claimed the `mkdir`-lock
+   provides cross-worktree "defense in depth" — it mechanically cannot: a
+   `git worktree` gives each session its own physical directory, so two
+   worktrees' `work/items/<id>.json.lock` paths are never the same path and
+   can never contend. The lock only protects concurrent *processes sharing
+   one checkout* — exactly ADH-008's original scope, e.g. two things writing
+   the same item within the single shared `work-sessions` checkout today, or
+   within whatever single checkout `sync-sessions-state` (Part 3, below)
+   runs from.
+   The **real** cross-worktree hazard once Part 1 lands is a **git merge
+   conflict**: if two session branches (e.g. two episodes of the same item,
+   or two unrelated sessions that both groomed the same portfolio item)
+   both modify the same `work/items/<id>.json`, merging both into `main`
+   produces an ordinary git conflict on that file's content — not a race,
+   but a real design gap this ADR does not resolve. Whoever implements
+   ADR-0002 Part 3 needs to decide how `sync-sessions-state` handles that
+   case (serialize per-item merges through one point and rely on git's
+   normal conflict resolution; detect and flag it for a human; or something
+   else) — this is genuinely open, not "already handled by layering."
 4. **Adopt ADR-0002's Part 3 as-is**: `main` as the single writer of the
    generated aggregate via a `sync-sessions-state` step; the "agents never
    `git checkout`/`git switch` in the canonical `work-sessions` checkout"
@@ -118,6 +133,11 @@ design that's already stale relative to what ADH-008 shipped.
   to `main` — they'll need a real merge (not just a fast-forward) when this
   session's work lands, since both touched `session-state.instructions.md`-
   adjacent territory independently.
+- **This ADR does not resolve cross-worktree item-file merge conflicts**
+  (see the corrected Decision point 3) — that's real, unsolved design work
+  for whoever builds ADR-0002 Part 3's `sync-sessions-state` step, not
+  something the per-item lock already covers. Flagging it here is meant to
+  prevent that implementer from assuming it's handled.
 
 ### Neutral
 - `work/backlog.json` stays a hand-maintained, single-writer-on-`main`

@@ -37,9 +37,11 @@ new candidate pages; ask which to add. **Append** new rows to the existing
 `## Related Wiki` table — never remove or edit prior rows.
 
 If there is nothing new to link, say so explicitly in the WORKLOG entry
-(step 4) — `Confluence: nothing to document` — rather than leaving it
-unmentioned. A skipped check and a checked-and-empty result must never look
-the same in the record.
+(step 4) — `Confluence: nothing new to link` (deliberately distinct
+wording from step 4b's batch-level "Nothing to document" — this one covers
+Confluence discovery only, not the whole external-write batch) — rather
+than leaving it unmentioned. A skipped check and a checked-and-empty result
+must never look the same in the record.
 
 ### 3. Check git state
 
@@ -72,7 +74,7 @@ Append to `<work-sessions-repo>/sessions/<session-id>/WORKLOG.md`:
 
 If question 4 named follow-up tasks, note them in the same entry under a `Follow-ups:` line — they become the seed for a future `#initialize_work_session_folder.prompt.md` run, not automatic new sessions.
 
-If step 2b found nothing new to link, add `Confluence: nothing to document` to the same entry — never omit it silently.
+If step 2b found nothing new to link, add `Confluence: nothing new to link` to the same entry — never omit it silently.
 
 Also update `<work-sessions-repo>/SESSIONS_STATE.md`: find the row for this session and set **Status** to `done` and **Last Change** to today.
 
@@ -93,14 +95,26 @@ Load `.agents/rules/atlassian.instructions.md` before this step.
    with a `timestamp` after that watermark (or the whole `history`, if
    there's no watermark yet) is "since last sync."
 
-2. **Propose the Jira transition**, only if the item has a
+2. **Plan the Jira transition(s)**, only if the item has a
    `tickets.main-bug-tracking` entry (a bare key like `IO-101` or a full
    `/browse/IO-101` URL — extract the key either way):
    - Call the get-transitions tool for the current issue — **never assume**
-     the current state (existing pre-flight rule above). Some workflows
-     have no direct in-progress-to-done transition and need a *chain* of
-     transitions — list what's available and ask the user which applies
-     rather than guessing a name.
+     the current state (existing pre-flight rule above).
+   - If a transition to a "done"/complete-reading status is directly
+     available, plan that single hop.
+   - If not, this workflow needs a **chain** (e.g. this org's `IO` project:
+     `In Progress → IN REVIEW → IN TESTING → READY TO DEPLOY → Done`, no
+     direct hop). Confirm the intended target status with the user, then
+     walk it: from each intermediate status, call get-transitions **again**
+     (workflows can be conditional — don't assume step *N*'s options from
+     step *N-1*'s) and pick the transition whose target moves toward the
+     confirmed goal. Build the **full planned sequence** before moving
+     on — the whole chain goes in the batch (step 5), not just the first
+     hop, so the single approval actually covers all of it.
+   - If none of the available transitions plausibly lead toward completion
+     (e.g. only `Reopen` is offered), plan **no transition** and say so
+     explicitly in the batch — "No applicable Jira transition available:
+     <list>" — rather than silently omitting the Jira part of the batch.
    - Draft **one** consolidated comment summarizing what happened since the
      watermark (question 1's summary + notable `history` entries) — not a
      transition-by-transition dump.
@@ -117,20 +131,31 @@ Load `.agents/rules/atlassian.instructions.md` before this step.
    `docs/gap-analysis-target-architecture.md`) — this is a deliberate no-op
    until one exists. Do not invent one ad hoc.
 
-5. **Show the full batch** — every proposed Jira transition/comment and
-   every proposed Confluence footer comment, verbatim — and ask: "Apply
-   all? (yes / no / edit)". On "edit," let the user restate what should
-   change, regenerate the batch, and show it again. If there is **nothing**
-   to propose (no ticket, no Related Wiki rows, nothing since the
+5. **Show the full batch** — the full planned Jira transition sequence (or
+   the explicit "no applicable transition" note) + comment, and every
+   proposed Confluence footer comment, verbatim — and ask: "Apply all?
+   (yes / no / edit)". On "edit," let the user restate what should change,
+   regenerate the batch, and show it again. If there is **nothing** to
+   propose at all (no ticket, no Related Wiki rows, nothing since the
    watermark), the batch must say so explicitly — **"Nothing to
    document — no Jira ticket, no Related Wiki pages, and no ticket-worthy
    history since the last sync."** Never silently skip this step.
 
 6. **On "yes," execute and verify each response** (per
-   `atlassian.instructions.md`'s "never assume success" rule) — the ticket
-   transition, then the comment, then each Confluence footer comment in
-   turn. Surface any failure immediately; do not silently continue past
-   one.
+   `atlassian.instructions.md`'s "never assume success" rule):
+   - Walk the planned transition sequence **one hop at a time**. Before
+     firing each hop, re-call get-transitions to confirm it's still offered
+     from the issue's *current* state — a workflow can change out from
+     under a multi-step close (e.g. another automation firing mid-sequence).
+     If a planned hop is no longer available, **stop the chain there**;
+     still apply the comment and every Confluence update regardless. Report
+     exactly which status the ticket was left at and name the remaining
+     hops as a follow-up in the close summary (step 6/`WORKLOG.md`) — do
+     **not** keep the session's worktrees around just to retry; the ticket
+     is discoverable and finishable later (e.g. via `#review-wip`) even
+     after this session is fully closed.
+   - Then the comment, then each Confluence footer comment in turn.
+   - Surface any failure immediately; do not silently continue past one.
 
 7. **Record the watermark** — after every response in the batch succeeds
    (or immediately, if the batch was "nothing to document"):

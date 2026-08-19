@@ -26,7 +26,9 @@ Branch into the appropriate mode below.
 ## Mode A — Author: addressing comments on your own PR
 
 ### A1. Load the PR
-Look for the PR URL in the active session's `work/wip.json` (the item's `work_items`) or its `CONTEXT.md`. If not found, ask:
+Look for the PR URL in the active session's `WORKLOG.md`/`CONTEXT.md` (where
+`#open-pr.prompt.md` records it — `work/wip.json`'s generated-view shape has
+no `work_items` field to hold this). If not found, ask:
 > "Enter the PR number or URL for this branch:"
 
 Fetch all review threads using `mcp_github_pull_request_read` (preferred) or as fallback:
