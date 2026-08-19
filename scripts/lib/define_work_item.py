@@ -24,7 +24,9 @@ to be shell-quoted, mirroring scripts/lib/upsert_wip.py's convention:
 `PRIORITY_ENV`, `SCOPE_ENV`, `TICKET_ENV`, `TASK_TYPE_ENV`, `NOW_ENV`,
 `RECORD_EVENT_ENV`, `EVENT_BY_ENV`, `CURRENT_STATE_DESCRIPTION_ENV`,
 `CURRENT_STATE_BLOCKED_ENV`, `LAST_SYNCED_ENV`, `OPEN_EPISODE_ENV`,
-`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`, `PARENT_ID_ENV`, `PROMOTE_ENV`.
+`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`, `PARENT_ID_ENV`, `PROMOTE_ENV`,
+`ROADMAP_STEP_ENV`, `ROADMAP_OWNER_ENV`, `ROADMAP_TARGET_DATE_ENV`,
+`ROADMAP_TYPE_ENV`.
 
 The decision-making logic lives in :func:`define_item` (pure — takes dicts,
 returns dicts) so it can be unit-tested without touching the filesystem;
@@ -207,7 +209,7 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
                  record_event=None, event_by="define-work-item.sh",
                  current_state_description=None, current_state_blocked=False,
                  last_synced=None, open_episode=None, close_episode=None,
-                 parent_id=None, promote=False):
+                 parent_id=None, promote=False, roadmap_step=None):
     """Return the shaped item dict for ``item_id``, merged onto ``existing``
     (``None`` for a brand new item). Pure — no I/O.
 
@@ -248,6 +250,13 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
     is ever invoked. The check here is deliberately duplicated (not
     redundant) because this function is also exercised directly by its own
     test suite, not only through the wrapper that runs the real validation.
+
+    ``roadmap_step`` (ADH-014): the last known constructor gap — ``roadmap``
+    was never settable through this function before. Plain reshape tier,
+    append-only (same precedent as ``history``): a
+    ``{step, owner, target_date, type}`` dict, appended to ``item["roadmap"]``
+    (creating the list if absent). Raises ``ValueError`` if ``step`` or
+    ``owner`` is empty. Existing entries are never touched.
     """
     is_new = existing is None
     item = dict(existing) if existing else {}
@@ -375,6 +384,15 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
     elif promote:
         item.pop("parent_id", None)
 
+    if roadmap_step is not None:
+        if not roadmap_step.get("step"):
+            raise ValueError("roadmap_step requires a non-empty 'step'")
+        if not roadmap_step.get("owner"):
+            raise ValueError("roadmap_step requires a non-empty 'owner'")
+        roadmap = list(item.get("roadmap") or [])
+        roadmap.append(dict(roadmap_step))
+        item["roadmap"] = roadmap
+
     return item
 
 
@@ -414,6 +432,15 @@ def main():
             ),
             parent_id=os.environ.get("PARENT_ID_ENV") or None,
             promote=os.environ.get("PROMOTE_ENV", "") == "1",
+            roadmap_step=(
+                {
+                    "step": os.environ.get("ROADMAP_STEP_ENV", ""),
+                    "owner": os.environ.get("ROADMAP_OWNER_ENV", ""),
+                    "target_date": os.environ.get("ROADMAP_TARGET_DATE_ENV", ""),
+                    "type": os.environ.get("ROADMAP_TYPE_ENV", ""),
+                }
+                if os.environ.get("ROADMAP_STEP_ENV") else None
+            ),
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)

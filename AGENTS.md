@@ -190,6 +190,7 @@ If any MCP-backed operation fails or the user reports MCP tools are unavailable:
 | `#override-tool-priority.prompt.md` | Temporarily force CLI/API usage over MCP for named tools, then revert |
 | `#triage-inbox.prompt.md` | Turn raw `work/INBOX.md` captures into shaped Work Items (priority + scope) via `define-work-item.sh` — `backlog.json` is a generated view, never hand-written |
 | `#groom-item.prompt.md` | Assess one item for readiness (why/what, acceptance criteria, test scenarios, missing info); flip `grooming → ready` |
+| `#define-work-item.prompt.md` | Ad hoc control-plane maintenance for one Work Item — bare shows full state, flagged shows current-vs-proposed and confirms; two-tier guardrails around lifecycle-adjacent flags (ADH-014) |
 | `#review-backlog.prompt.md` | Backlog health — stale/outstanding items, Jira status mismatches; regenerate `work/WORK_STATE.md` |
 | `#review-wip.prompt.md` | WIP health — load & importance, on-hold-too-long, blockers, bottlenecks; whether to finish / get help / drop |
 | `#plan-cycle.prompt.md` | Planning ceremony — prioritize, break down large items, set a roadmap → `planning/` |

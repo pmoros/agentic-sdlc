@@ -96,10 +96,15 @@ Write `<work>/planning/<YYYY-MM-DD>-<slug>.md`:
 
 ## Step 6 — Reflect into the tracker
 
-- `roadmap` (step, owner, `target_date`, type) has no `define-work-item.sh`
-  flag yet — the constructor doesn't support it as of ADH-008. Note the
-  planned roadmap in this cycle's plan doc for now; flag extending the
-  constructor as a follow-up rather than hand-editing `work/items/<id>.json`.
+- For each item that gained a concrete planned step this cycle (ADH-014),
+  record it on the item itself, not only in the plan doc's prose:
+  `scripts/define-work-item.sh <id> --roadmap-step "<step text>"
+  --roadmap-owner "<name>" [--roadmap-target-date <date>]
+  [--roadmap-type <type>] --work-sessions-repo <path>`. `--roadmap-owner`
+  is required — if the cycle didn't actually settle on an owner for a
+  step, that's a real gap to raise before writing it, not something to
+  default away. Append-only: this never edits or removes a past roadmap
+  entry, matching `history`'s own precedent.
 - For any item whose priority/scope changed, update it via
   `scripts/define-work-item.sh <id> [--priority ...] [--scope ...]
   --record-event "Re-prioritized at planning" --by "#plan-cycle"

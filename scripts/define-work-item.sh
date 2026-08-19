@@ -97,9 +97,31 @@
 #                                 (de-aggregate back to independent).
 #                                 Refuses if the item has no parent_id to
 #                                 clear. Mutually exclusive with --parent.
+#   --roadmap-step <text>         ADH-014: append one {step, owner,
+#                                 target_date, type} entry to roadmap[]
+#                                 (creating it if absent) — append-only,
+#                                 same precedent as history. Requires
+#                                 --roadmap-owner.
+#   --roadmap-owner <name>        Required alongside --roadmap-step.
+#   --roadmap-target-date <date>  Optional, only meaningful with
+#                                 --roadmap-step. Default: TBD.
+#   --roadmap-type <type>         Optional, only meaningful with
+#                                 --roadmap-step. Default: standard.
 #   --work-sessions-repo <path>   Default: sibling ../work-sessions of this
 #                                 repo.
 #   -h, --help                    Show this help.
+#
+# GUARDRAILS (ADH-014)
+#   --status done combined with --close-episode (any outcome) is refused
+#   at parse time — --close-episode --outcome done already sets status,
+#   so passing both is redundant or contradictory.
+#
+#   --status done WITHOUT --close-episode is refused if the item's
+#   sessions[] last entry is still open (closed: null) — use
+#   --close-episode --outcome done instead, so the episode record and the
+#   item's status move together. This check runs inside the item's own
+#   lock, immediately before the write, not as a separate pre-lock read —
+#   see the inline comment at the call site for why that ordering matters.
 #
 # Only fields explicitly passed change; everything else on an existing item
 # (including sessions[], history, current_state, roadmap) is preserved.
@@ -141,6 +163,10 @@ CLOSE_EPISODE=""
 OUTCOME=""
 PARENT=""
 PROMOTE=0
+ROADMAP_STEP=""
+ROADMAP_OWNER=""
+ROADMAP_TARGET_DATE=""
+ROADMAP_TYPE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -162,6 +188,10 @@ while [[ $# -gt 0 ]]; do
     --outcome)                   needval "$@"; OUTCOME="$2"; shift 2 ;;
     --parent)                     needval "$@"; PARENT="$2"; shift 2 ;;
     --promote)                    PROMOTE=1; shift ;;
+    --roadmap-step)                needval "$@"; ROADMAP_STEP="$2"; shift 2 ;;
+    --roadmap-owner)                 needval "$@"; ROADMAP_OWNER="$2"; shift 2 ;;
+    --roadmap-target-date)             needval "$@"; ROADMAP_TARGET_DATE="$2"; shift 2 ;;
+    --roadmap-type)                      needval "$@"; ROADMAP_TYPE="$2"; shift 2 ;;
     --work-sessions-repo)     needval "$@"; WORK_SESSIONS_REPO="$2"; shift 2 ;;
     -*)                       die "unknown option: $1 (try --help)" ;;
     *)                        [[ -z "$ITEM_ID" ]] && ITEM_ID="$1" || die "unexpected arg: $1"; shift ;;
@@ -172,6 +202,13 @@ done
 [[ -d "$WORK_SESSIONS_REPO" ]] || die "work-sessions repo not found at: $WORK_SESSIONS_REPO (pass --work-sessions-repo)"
 [[ -n "$CLOSE_EPISODE" && -z "$OUTCOME" ]] && die "--close-episode requires --outcome <done|stopped|paused>"
 [[ -n "$PARENT" && "$PROMOTE" -eq 1 ]] && die "--parent and --promote are mutually exclusive"
+[[ "$STATUS" == "done" && -n "$CLOSE_EPISODE" ]] && die "--status done and --close-episode are mutually exclusive — --close-episode --outcome done already sets status to done; passing both is redundant or (with a non-done outcome) contradictory"
+[[ -z "$ROADMAP_STEP" && ( -n "$ROADMAP_OWNER" || -n "$ROADMAP_TARGET_DATE" || -n "$ROADMAP_TYPE" ) ]] && die "--roadmap-owner/--roadmap-target-date/--roadmap-type require --roadmap-step"
+[[ -n "$ROADMAP_STEP" && -z "$ROADMAP_OWNER" ]] && die "--roadmap-step requires --roadmap-owner"
+if [[ -n "$ROADMAP_STEP" ]]; then
+  [[ -n "$ROADMAP_TARGET_DATE" ]] || ROADMAP_TARGET_DATE="TBD"
+  [[ -n "$ROADMAP_TYPE" ]] || ROADMAP_TYPE="standard"
+fi
 
 ITEMS_DIR="$WORK_SESSIONS_REPO/work/items"
 mkdir -p "$ITEMS_DIR"
@@ -237,24 +274,26 @@ trap release_locks EXIT
 # item's own lock is ever acquired -------------------------------------
 if [[ -n "$PARENT" ]]; then
   acquire_lock "$PARENT_LOCK_DIR" "parent-link"
-  python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPT_DIR/lib')
+  SCRIPT_LIB_DIR_ENV="$SCRIPT_DIR/lib" ITEMS_DIR_ENV="$ITEMS_DIR" \
+  ITEM_ID_ENV="$ITEM_ID" PARENT_ENV="$PARENT" python3 -c "
+import os, sys
+sys.path.insert(0, os.environ['SCRIPT_LIB_DIR_ENV'])
 from define_work_item import validate_parent_link
 try:
-    validate_parent_link('$ITEMS_DIR', '$ITEM_ID', '$PARENT')
+    validate_parent_link(os.environ['ITEMS_DIR_ENV'], os.environ['ITEM_ID_ENV'], os.environ['PARENT_ENV'])
 except ValueError as exc:
     print(f'define-work-item: {exc}', file=sys.stderr)
     sys.exit(1)
 " || die "parent link validation failed for $ITEM_ID -> $PARENT"
 elif [[ "$PROMOTE" -eq 1 ]]; then
   acquire_lock "$PARENT_LOCK_DIR" "parent-link"
-  python3 -c "
-import sys
-sys.path.insert(0, '$SCRIPT_DIR/lib')
+  SCRIPT_LIB_DIR_ENV="$SCRIPT_DIR/lib" ITEMS_DIR_ENV="$ITEMS_DIR" \
+  ITEM_ID_ENV="$ITEM_ID" python3 -c "
+import os, sys
+sys.path.insert(0, os.environ['SCRIPT_LIB_DIR_ENV'])
 from define_work_item import validate_promote
 try:
-    validate_promote('$ITEMS_DIR', '$ITEM_ID')
+    validate_promote(os.environ['ITEMS_DIR_ENV'], os.environ['ITEM_ID_ENV'])
 except ValueError as exc:
     print(f'define-work-item: {exc}', file=sys.stderr)
     sys.exit(1)
@@ -262,6 +301,31 @@ except ValueError as exc:
 fi
 
 acquire_lock "$LOCK_DIR" "item"
+
+# --- ADH-014 Tier 1: refuse --status done while an episode is still open.
+# MUST run here — after the item's own lock is held, immediately before
+# the write — not as a separately-timed pre-lock read. Gate A round 2:
+# a pre-lock read is exactly the unguarded-read hazard
+# validate_parent_link's own docstring warns about; once this process
+# holds $LOCK_DIR, no concurrent writer can be mid-write on this same
+# item, so a read taken now is authoritative, not stale.
+if [[ "$STATUS" == "done" && -z "$CLOSE_EPISODE" && -f "$ITEM_FILE" ]]; then
+  ITEM_FILE_ENV="$ITEM_FILE" python3 -c "
+import json, os, sys
+with open(os.environ['ITEM_FILE_ENV']) as fh:
+    item = json.load(fh)
+sessions = item.get('sessions') or []
+if sessions and sessions[-1].get('closed') is None:
+    print(
+        f\"define-work-item: item has an open episode \"
+        f\"({sessions[-1].get('episode_id')!r}) — use --close-episode \"
+        f\"<session-id> --outcome done instead of a plain --status done, \"
+        f\"to avoid leaving inconsistent episode state\",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+" || die "refused: open episode on $ITEM_ID (see message above)"
+fi
 
 ITEM_ID_ENV="$ITEM_ID" ITEM_FILE_ENV="$ITEM_FILE" \
 TITLE_ENV="$TITLE" DESCRIPTION_ENV="$DESCRIPTION" STATUS_ENV="$STATUS" \
@@ -273,6 +337,8 @@ CURRENT_STATE_BLOCKED_ENV="$CURRENT_STATE_BLOCKED" \
 LAST_SYNCED_ENV="$LAST_SYNCED" \
 OPEN_EPISODE_ENV="$OPEN_EPISODE" CLOSE_EPISODE_ENV="$CLOSE_EPISODE" OUTCOME_ENV="$OUTCOME" \
 PARENT_ID_ENV="$PARENT" PROMOTE_ENV="$PROMOTE" \
+ROADMAP_STEP_ENV="$ROADMAP_STEP" ROADMAP_OWNER_ENV="$ROADMAP_OWNER" \
+ROADMAP_TARGET_DATE_ENV="$ROADMAP_TARGET_DATE" ROADMAP_TYPE_ENV="$ROADMAP_TYPE" \
 python3 "$SCRIPT_DIR/lib/define_work_item.py" || die "failed to define item $ITEM_ID"
 
 err ">> wrote $ITEM_FILE"

@@ -112,6 +112,18 @@ class DefineWorkItem(TempRepoCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-21.json")))
 
+    def test_parent_flag_does_not_execute_code_embedded_in_the_value(self):
+        # A `--parent` value crafted to break out of the (now env-var-passed)
+        # python3 -c string context must be treated as inert data, not
+        # executed. Regression test for the injection a fresh-context
+        # reviewer demonstrated when this validation call still
+        # interpolated $PARENT directly into Python source text.
+        marker = os.path.join(self.tmp, "PWNED_PARENT_MARKER")
+        evil_parent = f"ADH100'+__import__('os').system('touch {marker}')+'y"
+        r = self.define("ADH-100", ["--description", "d", "--parent", evil_parent])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(marker))
+
     def test_parent_flag_refuses_a_two_level_chain(self):
         self.define("ADH-20", ["--description", "epic"])
         self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20"])
@@ -321,6 +333,126 @@ class DefineWorkItem(TempRepoCase):
         for i in range(5):
             self.assertTrue(os.path.exists(os.path.join(self.items_dir, f"ADH-{i}.json")))
         self.assertLess(elapsed, 5, "different items must not contend for the same lock")
+
+    # --- ADH-014: roadmap_step -----------------------------------------
+
+    def test_roadmap_step_appends_with_defaults(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-step", "Do the thing", "--roadmap-owner", "pmoros"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        roadmap = self.read_item("ADH-20")["roadmap"]
+        self.assertEqual(roadmap, [
+            {"step": "Do the thing", "owner": "pmoros",
+             "target_date": "TBD", "type": "standard"},
+        ])
+
+    def test_roadmap_owner_without_step_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-owner", "pmoros"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_step_without_owner_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-step", "Do the thing"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_target_date_without_step_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-target-date", "2026-09-01"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_type_without_step_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-type", "milestone"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_step_combines_with_parent(self):
+        self.define("ADH-20", ["--description", "epic"])
+        r = self.define("ADH-21", [
+            "--description", "sub", "--parent", "ADH-20",
+            "--roadmap-step", "First step", "--roadmap-owner", "pmoros",
+        ])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-21")
+        self.assertEqual(item["parent_id"], "ADH-20")
+        self.assertEqual(item["roadmap"][0]["step"], "First step")
+
+    def test_roadmap_step_combines_with_open_episode(self):
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "stopped"])
+        r = self.define("ADH-20", [
+            "--open-episode", "ADH-20--e2",
+            "--roadmap-step", "Next step", "--roadmap-owner", "pmoros",
+        ])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-20")
+        self.assertEqual(item["sessions"][-1]["episode_id"], "ADH-20--e2")
+        self.assertIsNone(item["sessions"][-1]["closed"])
+        self.assertEqual(item["roadmap"][0]["step"], "Next step")
+
+    # --- ADH-014: Tier 1 -- --status done vs. an open episode ----------
+
+    def test_status_done_with_close_episode_together_refused(self):
+        self.define("ADH-20", ["--description", "d", "--status", "in progress"])
+        r = self.define("ADH-20", ["--status", "done", "--close-episode", "ADH-20", "--outcome", "done"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_status_done_refused_when_episode_still_open(self):
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "done"])  # episode 1 closed
+        self.define("ADH-20", ["--open-episode", "ADH-20--e2"])  # now open again
+        r = self.define("ADH-20", ["--status", "done"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("open episode", r.stderr)
+        self.assertEqual(self.read_item("ADH-20")["status"], "in progress")
+
+    def test_status_done_allowed_when_no_episode_ever_opened(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--status", "done"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-20")["status"], "done")
+
+    def test_status_done_allowed_when_last_episode_already_closed(self):
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "stopped"])
+        r = self.define("ADH-20", ["--status", "done"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-20")["status"], "done")
+
+    def test_concurrent_status_done_and_open_episode_never_corrupt_the_item(self):
+        # Gate A round 2's own scenario: two racing subprocesses on the
+        # SAME item -- `--status done` (no --close-episode) and
+        # `--open-episode` -- must never together produce status: done
+        # with an open sessions[] entry, whichever wins the item's lock.
+        #
+        # Gate B: a brand-new item's synthesized episode 1 is always open
+        # (_ensure_episode_1 derives `closed` from `status`, and a fresh
+        # item defaults to "grooming", not a closed-like status) -- so
+        # --open-episode always refuses outright regardless of timing,
+        # making the race structurally unreachable. Close episode 1 first
+        # so --open-episode can actually succeed and the race is real.
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "stopped"])
+
+        procs = [
+            subprocess.Popen(
+                [SCRIPT, "ADH-20", "--work-sessions-repo", self.ws, "--status", "done"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ),
+            subprocess.Popen(
+                [SCRIPT, "ADH-20", "--work-sessions-repo", self.ws,
+                 "--open-episode", "ADH-20--e2"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ),
+        ]
+        results = [p.communicate(timeout=15) for p in procs]
+
+        item = self.read_item("ADH-20")
+        sessions = item.get("sessions") or []
+        has_open_episode = bool(sessions) and sessions[-1].get("closed") is None
+        self.assertFalse(
+            item.get("status") == "done" and has_open_episode,
+            f"corrupted state: status=done with an open episode -- results: {results}")
 
 
 if __name__ == "__main__":

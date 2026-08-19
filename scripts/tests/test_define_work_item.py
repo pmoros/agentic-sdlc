@@ -459,6 +459,77 @@ class Hierarchy(unittest.TestCase):
         self.assertNotIn("parent_id", item)
 
 
+class RoadmapStep(unittest.TestCase):
+    """ADH-014: --roadmap-step is the last known constructor gap -- roadmap
+    was never settable at all before this. Append-only, matching history's
+    own precedent; plain reshape tier, not session-lifecycle opt-in."""
+
+    def _existing(self, roadmap=None):
+        item = {
+            "id": "ADH-20", "title": "t", "description": "d", "status": "grooming",
+            "current_state": {"description": "d", "is_blocked": False},
+            "history": [], "sessions": [],
+        }
+        if roadmap is not None:
+            item["roadmap"] = roadmap
+        return item
+
+    def test_appends_to_empty_roadmap(self):
+        item = D.define_item(
+            self._existing(), item_id="ADH-20",
+            roadmap_step={"step": "Do the thing", "owner": "pmoros",
+                          "target_date": "TBD", "type": "standard"},
+            now=NOW)
+        self.assertEqual(item["roadmap"], [
+            {"step": "Do the thing", "owner": "pmoros",
+             "target_date": "TBD", "type": "standard"},
+        ])
+
+    def test_appends_without_touching_existing_entries(self):
+        existing_step = {"step": "Already planned", "owner": "someone",
+                          "target_date": "2026-09-01", "type": "standard"}
+        item = D.define_item(
+            self._existing(roadmap=[existing_step]), item_id="ADH-20",
+            roadmap_step={"step": "New step", "owner": "pmoros",
+                          "target_date": "TBD", "type": "standard"},
+            now=NOW)
+        self.assertEqual(item["roadmap"][0], existing_step)
+        self.assertEqual(len(item["roadmap"]), 2)
+        self.assertEqual(item["roadmap"][1]["step"], "New step")
+
+    def test_no_roadmap_step_leaves_roadmap_untouched(self):
+        existing_step = {"step": "s", "owner": "o", "target_date": "TBD", "type": "standard"}
+        item = D.define_item(
+            self._existing(roadmap=[existing_step]), item_id="ADH-20",
+            priority="Major", now=NOW)
+        self.assertEqual(item["roadmap"], [existing_step])
+
+    def test_requires_non_empty_step(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._existing(), item_id="ADH-20",
+                roadmap_step={"step": "", "owner": "pmoros",
+                              "target_date": "TBD", "type": "standard"},
+                now=NOW)
+
+    def test_requires_non_empty_owner(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._existing(), item_id="ADH-20",
+                roadmap_step={"step": "Do the thing", "owner": "",
+                              "target_date": "TBD", "type": "standard"},
+                now=NOW)
+
+    def test_fresh_item_with_no_prior_roadmap_field(self):
+        item = D.define_item(
+            None, item_id="ADH-20", description="d",
+            roadmap_step={"step": "First step", "owner": "pmoros",
+                          "target_date": "TBD", "type": "standard"},
+            now=NOW)
+        self.assertEqual(len(item["roadmap"]), 1)
+        self.assertEqual(item["roadmap"][0]["step"], "First step")
+
+
 class LegacyItemsWithoutSessionsField(unittest.TestCase):
     """Real existing items (pre-migration shape) have no `sessions` key."""
 
