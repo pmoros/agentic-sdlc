@@ -37,8 +37,14 @@ repo right after this step.
 
 - **Ticket provided:** extract the key (e.g. `PROJ-6025` from `https://yourcompany.atlassian.net/browse/PROJ-6025`).
 - **No ticket:** read `<work-sessions-repo>/SESSIONS_STATE.md` (sibling `../work-sessions`), find the highest existing `ADH-NNN`, increment by 1 (`ADH-001` if none exist).
+- **Reopening an item (ADH-011)**: if the caller (typically the
+  `start-work-session` skill, after its own reopen check) passes
+  `--reopen-item <item-id>` instead of gathering a fresh id, skip the two
+  bullets above entirely — the actual session id is computed by
+  `init-session.sh` itself from the item's existing `sessions[]`
+  (`<item-id>--eN`), not by this step.
 
-Session folder name = `<session-id>-<slug>` (or just `<session-id>` if it already reads as a slug).
+Session folder name = `<session-id>-<slug>` (or just `<session-id>` if it already reads as a slug) — **except on a reopen**, where the folder name is whatever `init-session.sh` derives (`<item-id>--eN`).
 
 ### 4. Run the script
 
@@ -53,6 +59,13 @@ scripts/init-session.sh <session-id-slug> \
   --scope <XS|S|M|L|XL> \
   --task-type <type> \
   --blockers "<blockers or omit>"
+```
+
+**On a reopen**, run instead (no positional session-id-slug — the script
+computes it):
+
+```bash
+scripts/init-session.sh --reopen-item <item-id> --goal "<goal>"
 ```
 
 This creates `<work-sessions-repo>/sessions/<session-id-slug>/` from
@@ -72,6 +85,10 @@ session-start ↔ item linkage, through the one canonical constructor,
   only `status` flips to `in progress`.
 - Otherwise a **fresh** item is seeded from the session's
   goal/ticket/scope/task-type.
+- **On `--reopen-item` (ADH-011)**: neither of the above — the item must
+  already exist (fails loudly if not), and instead of a plain status flip
+  the script calls `--open-episode`, which appends a new `sessions[]` entry
+  and records its own history event. No fresh item is ever seeded this way.
 - Either way `current_state` is set (blocked iff `--blockers` was given), and
   a `"session started"` entry is appended to the append-only `history` — via
   `define-work-item.sh --record-event`, not a hand edit.
