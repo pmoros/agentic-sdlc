@@ -26,18 +26,23 @@
 #                              a per-item diff of what --commit would
 #                              produce and a summary count.
 #   --commit                  Refuses if work/items/ already holds a prior
-#                              migration (a real, non-staging entry).
-#                              Clears a stale work/items/.staging/ left by
-#                              an interrupted prior attempt, then writes
-#                              every new work/items/<id>.json to a fresh
-#                              staging dir, independently re-reads each one
-#                              back and verifies it is byte-identical to the
-#                              source on every pre-existing field. A single
-#                              failing item aborts the WHOLE commit — no
-#                              partial work/items/ is ever left visible —
-#                              only after every item verifies does it move
-#                              staging into place. backlog.json/wip.json are
-#                              left in place, untouched, until a human runs
+#                              migration. Clears a stale
+#                              work/.items-migration-staging/ left by an
+#                              interrupted prior attempt, then writes every
+#                              new work/items/<id>.json to that fresh
+#                              staging dir (a SIBLING of work/items/, not
+#                              nested inside it), independently re-reads
+#                              each one back and verifies it is
+#                              byte-identical to the source on every
+#                              pre-existing field. Only after every item
+#                              verifies does it install the whole staging
+#                              directory as work/items/ in ONE atomic
+#                              syscall (os.replace on the directory itself,
+#                              not a per-file loop) — a single failing item,
+#                              or a failure of the move itself, aborts the
+#                              WHOLE commit with no partial work/items/ ever
+#                              visible. backlog.json/wip.json are left in
+#                              place, untouched, until a human runs
 #                              --commit-cleanup.
 #   --commit-cleanup           Renames backlog.json/wip.json to
 #                              *.pre-migration.bak (never deletes). Run only
@@ -48,12 +53,19 @@
 #   --work-sessions-repo <p>  Default: sibling ../work-sessions of this repo.
 #   -h, --help                 Show this help.
 #
-# ENV (test-only hook — production runs never set this)
-#   MIGRATE_FAULT_CORRUPT_ID_ENV   During --commit, deliberately corrupts the
-#                                  named item's staged write before the
-#                                  verification re-read, to exercise the
-#                                  single-failing-item-aborts-the-whole-
-#                                  commit contract end-to-end in tests.
+# ENV (test-only hooks — production runs never set these)
+#   MIGRATE_FAULT_CORRUPT_ID_ENV        During --commit, deliberately
+#                                       corrupts the named item's staged
+#                                       write before the verification
+#                                       re-read, to exercise the
+#                                       single-failing-item-aborts-the-
+#                                       whole-commit contract end-to-end.
+#   MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV  Set to 1 to simulate the final
+#                                       atomic move itself failing (e.g.
+#                                       disk full) — exercises that this
+#                                       leaves no partial work/items/ and
+#                                       cleans up staging, same as any
+#                                       other failure point.
 
 set -euo pipefail
 

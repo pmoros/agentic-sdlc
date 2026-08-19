@@ -180,7 +180,9 @@ def default_launch(spec: dict, *, base_ref: str = "main", worktrees_dir: str,
                    cwd=wt, env=env, check=False)
     # newest result.json for this task
     traces = sorted(__import__("glob").glob(os.path.join(run_records_dir, "traces", f"{tid}-*.result.json")))
-    record = json.load(open(traces[-1])) if traces else {"task_id": tid, "is_error": True, "outcome": None}
+    # No preset "outcome" here (unlike a bare {"outcome": None} would be) —
+    # that would make the setdefault below a silent no-op on this path.
+    record = json.load(open(traces[-1])) if traces else {"task_id": tid, "is_error": True}
     record.setdefault("outcome", _outcome_from_result(record))
     record.setdefault("branch", branch)
     record["worktree"] = wt

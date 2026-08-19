@@ -213,30 +213,45 @@ def _clean_stale_staging(staging_dir):
 
 
 def _precheck_commit(items_dir, staging_dir):
-    """Refuse if ``items_dir`` already holds a real (non-staging) prior
-    migration. Otherwise clear any stale staging left by an interrupted
-    prior attempt so a fresh one can be built.
+    """Refuse if ``items_dir`` already holds a real prior migration.
+    Otherwise clear any stale staging left by an interrupted prior attempt
+    so a fresh one can be built. ``staging_dir`` is a SIBLING of
+    ``items_dir`` (not nested inside it) — see :func:`run_commit` for why
+    that layout matters.
     """
-    if os.path.isdir(items_dir):
-        real_entries = [e for e in os.listdir(items_dir) if e != ".staging"]
-        if real_entries:
-            raise RuntimeError(
-                "work/items/ already exists and contains items — migration "
-                "is a one-time step; refusing to run again")
+    if os.path.isdir(items_dir) and os.listdir(items_dir):
+        raise RuntimeError(
+            "work/items/ already exists and contains items — migration "
+            "is a one-time step; refusing to run again")
     _clean_stale_staging(staging_dir)
 
 
-def run_commit(work_dir, work_sessions_repo, out=None, _fault_inject_id=None):
+def run_commit(work_dir, work_sessions_repo, out=None, _fault_inject_id=None,
+               _fault_fail_final_move=False):
     """``_fault_inject_id``, if given, deliberately corrupts that item's
     staged write before the verification re-read — a test-only hook (there
     is no legitimate code path that produces a verification mismatch; this
     simulates one, e.g. a corrupted/interrupted write) exercising the
     single-failing-item-aborts-the-whole-commit contract end-to-end. See
     MIGRATE_FAULT_CORRUPT_ID_ENV below.
+
+    ``_fault_fail_final_move``, if true, simulates the final atomic move
+    itself failing (e.g. disk full, permission error) — a second, distinct
+    test-only hook, since a REAL atomic-rename failure can't be reliably
+    triggered from a black-box test. See MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV.
     """
     out = out or sys.stdout
     items_dir = os.path.join(work_dir, "items")
-    staging_dir = os.path.join(items_dir, ".staging")
+    # A SIBLING of items_dir, not nested inside it — deliberately, so the
+    # final step below can be a single `os.replace(staging_dir, items_dir)`.
+    # A directory cannot be atomically renamed into its own parent, so an
+    # earlier version of this function nested staging inside items_dir and
+    # had to fall back to a per-file move loop — NOT atomic as a whole, and
+    # a crash mid-loop could leave work/items/ with a real subset of items
+    # present, which is exactly the "partial migration state" this design
+    # promises never happens (ADH-008 Gate B QA finding, see
+    # docs/gate-a-review-r1.md-style record — the review that caught this).
+    staging_dir = os.path.join(work_dir, ".items-migration-staging")
 
     _precheck_commit(items_dir, staging_dir)
 
@@ -267,16 +282,22 @@ def run_commit(work_dir, work_sessions_repo, out=None, _fault_inject_id=None):
                 raise RuntimeError(
                     f"verification failed for {item_id}: field(s) "
                     f"{', '.join(mismatches)} do not match the source")
-    except Exception:
-        # A single failing item aborts the WHOLE commit — no partial
-        # work/items/ is ever left visible.
-        shutil.rmtree(items_dir, ignore_errors=True)
-        raise
 
-    for item_id in migrated_by_id:
-        os.replace(os.path.join(staging_dir, f"{item_id}.json"),
-                    os.path.join(items_dir, f"{item_id}.json"))
-    shutil.rmtree(staging_dir, ignore_errors=True)
+        if _fault_fail_final_move:
+            raise OSError("simulated failure during final atomic move (test-only fault injection)")
+
+        # The ENTIRE staged, verified tree becomes work/items/ in ONE
+        # syscall — either it's all there or (on any failure above, or a
+        # genuine OS-level failure of this call itself) none of it is.
+        # There is no window in which work/items/ holds a partial result.
+        os.replace(staging_dir, items_dir)
+    except Exception:
+        # Every failure path — a bad write, a verification mismatch, or the
+        # final move itself — lands here. staging_dir is always what's left
+        # to clean up; items_dir is untouched until the atomic move above
+        # succeeds, so it can never be left holding a partial result.
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
 
     print(f"-- migrated {len(migrated_by_id)} item(s) to work/items/ --", file=out)
     print(
@@ -350,7 +371,9 @@ def main():
             return run_dry_run(work_dir, work_sessions_repo)
         if mode == "commit":
             fault_id = os.environ.get("MIGRATE_FAULT_CORRUPT_ID_ENV", "").strip() or None
-            return run_commit(work_dir, work_sessions_repo, _fault_inject_id=fault_id)
+            fault_final_move = os.environ.get("MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV", "").strip() == "1"
+            return run_commit(work_dir, work_sessions_repo, _fault_inject_id=fault_id,
+                              _fault_fail_final_move=fault_final_move)
         if mode == "commit-cleanup":
             return run_commit_cleanup(work_dir)
         if mode == "verify":

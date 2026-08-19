@@ -132,6 +132,8 @@ class Commit(MigrateItemsBase):
 
     def test_no_staging_dir_left_behind_on_success(self):
         self.migrate(["--commit"])
+        self.assertFalse(os.path.exists(os.path.join(self.work_dir, ".items-migration-staging")))
+        # and it wasn't left nested inside items_dir either (old, non-atomic layout)
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, ".staging")))
 
     def test_backlog_and_wip_left_in_place_after_commit(self):
@@ -159,14 +161,14 @@ class Commit(MigrateItemsBase):
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-009.json")))
 
     def test_clears_stale_staging_from_interrupted_attempt_and_proceeds(self):
-        staging = os.path.join(self.items_dir, ".staging")
+        staging = os.path.join(self.work_dir, ".items-migration-staging")
         os.makedirs(staging)
         with open(os.path.join(staging, "LEFTOVER.json"), "w") as fh:
             fh.write("not valid json {{{")
 
         r = self.migrate(["--commit"])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertFalse(os.path.exists(os.path.join(self.items_dir, ".staging", "LEFTOVER.json")))
+        self.assertFalse(os.path.exists(os.path.join(staging, "LEFTOVER.json")))
         self.assertTrue(os.path.exists(os.path.join(self.items_dir, "ADH-009.json")))
 
     # --- failure: no partial state visible --------------------------------
@@ -188,6 +190,34 @@ class Commit(MigrateItemsBase):
 
     def test_retry_after_a_failed_commit_succeeds_cleanly(self):
         first = self.migrate(["--commit"], env={"MIGRATE_FAULT_CORRUPT_ID_ENV": "ADH-009"})
+        self.assertNotEqual(first.returncode, 0)
+        second = self.migrate(["--commit"])
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertTrue(os.path.exists(os.path.join(self.items_dir, "ADH-009.json")))
+
+    # --- failure of the final atomic move itself (ADH-008 Gate B QA finding:
+    #     the old per-file move loop wasn't atomic as a whole — a crash
+    #     mid-loop could leave work/items/ with a real subset of items. A
+    #     genuine OS-level failure of a single `os.replace` can't be
+    #     reliably triggered black-box, hence the fault-injection hook,
+    #     mirroring the existing MIGRATE_FAULT_CORRUPT_ID_ENV pattern.) ---
+
+    def test_final_move_failure_leaves_no_items_dir_at_all(self):
+        r = self.migrate(["--commit"], env={"MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV": "1"})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(self.items_dir))
+
+    def test_final_move_failure_cleans_up_staging(self):
+        self.migrate(["--commit"], env={"MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV": "1"})
+        self.assertFalse(os.path.exists(os.path.join(self.work_dir, ".items-migration-staging")))
+
+    def test_final_move_failure_leaves_backlog_and_wip_untouched(self):
+        self.migrate(["--commit"], env={"MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV": "1"})
+        self.assertEqual(self.read_json("backlog.json"), BACKLOG)
+        self.assertEqual(self.read_json("wip.json"), WIP)
+
+    def test_retry_after_a_final_move_failure_succeeds_cleanly(self):
+        first = self.migrate(["--commit"], env={"MIGRATE_FAULT_FAIL_FINAL_MOVE_ENV": "1"})
         self.assertNotEqual(first.returncode, 0)
         second = self.migrate(["--commit"])
         self.assertEqual(second.returncode, 0, second.stderr)
