@@ -322,6 +322,100 @@ class DefineWorkItem(TempRepoCase):
             self.assertTrue(os.path.exists(os.path.join(self.items_dir, f"ADH-{i}.json")))
         self.assertLess(elapsed, 5, "different items must not contend for the same lock")
 
+    # --- ADH-014: roadmap_step -----------------------------------------
+
+    def test_roadmap_step_appends_with_defaults(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-step", "Do the thing", "--roadmap-owner", "pmoros"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        roadmap = self.read_item("ADH-20")["roadmap"]
+        self.assertEqual(roadmap, [
+            {"step": "Do the thing", "owner": "pmoros",
+             "target_date": "TBD", "type": "standard"},
+        ])
+
+    def test_roadmap_owner_without_step_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-owner", "pmoros"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_step_without_owner_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-step", "Do the thing"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_target_date_without_step_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-target-date", "2026-09-01"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_roadmap_step_combines_with_parent(self):
+        self.define("ADH-20", ["--description", "epic"])
+        r = self.define("ADH-21", [
+            "--description", "sub", "--parent", "ADH-20",
+            "--roadmap-step", "First step", "--roadmap-owner", "pmoros",
+        ])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-21")
+        self.assertEqual(item["parent_id"], "ADH-20")
+        self.assertEqual(item["roadmap"][0]["step"], "First step")
+
+    # --- ADH-014: Tier 1 -- --status done vs. an open episode ----------
+
+    def test_status_done_with_close_episode_together_refused(self):
+        self.define("ADH-20", ["--description", "d", "--status", "in progress"])
+        r = self.define("ADH-20", ["--status", "done", "--close-episode", "ADH-20", "--outcome", "done"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_status_done_refused_when_episode_still_open(self):
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "done"])  # episode 1 closed
+        self.define("ADH-20", ["--open-episode", "ADH-20--e2"])  # now open again
+        r = self.define("ADH-20", ["--status", "done"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("open episode", r.stderr)
+        self.assertEqual(self.read_item("ADH-20")["status"], "in progress")
+
+    def test_status_done_allowed_when_no_episode_ever_opened(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--status", "done"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-20")["status"], "done")
+
+    def test_status_done_allowed_when_last_episode_already_closed(self):
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "stopped"])
+        r = self.define("ADH-20", ["--status", "done"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-20")["status"], "done")
+
+    def test_concurrent_status_done_and_open_episode_never_corrupt_the_item(self):
+        # Gate A round 2's own scenario: two racing subprocesses on the
+        # SAME item -- `--status done` (no --close-episode) and
+        # `--open-episode` -- must never together produce status: done
+        # with an open sessions[] entry, whichever wins the item's lock.
+        self.define("ADH-20", ["--description", "d"])
+
+        procs = [
+            subprocess.Popen(
+                [SCRIPT, "ADH-20", "--work-sessions-repo", self.ws, "--status", "done"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ),
+            subprocess.Popen(
+                [SCRIPT, "ADH-20", "--work-sessions-repo", self.ws,
+                 "--open-episode", "ADH-20--e2"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ),
+        ]
+        results = [p.communicate(timeout=15) for p in procs]
+
+        item = self.read_item("ADH-20")
+        sessions = item.get("sessions") or []
+        has_open_episode = bool(sessions) and sessions[-1].get("closed") is None
+        self.assertFalse(
+            item.get("status") == "done" and has_open_episode,
+            f"corrupted state: status=done with an open episode -- results: {results}")
+
 
 if __name__ == "__main__":
     unittest.main()

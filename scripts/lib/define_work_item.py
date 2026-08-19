@@ -24,7 +24,9 @@ to be shell-quoted, mirroring scripts/lib/upsert_wip.py's convention:
 `PRIORITY_ENV`, `SCOPE_ENV`, `TICKET_ENV`, `TASK_TYPE_ENV`, `NOW_ENV`,
 `RECORD_EVENT_ENV`, `EVENT_BY_ENV`, `CURRENT_STATE_DESCRIPTION_ENV`,
 `CURRENT_STATE_BLOCKED_ENV`, `LAST_SYNCED_ENV`, `OPEN_EPISODE_ENV`,
-`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`, `PARENT_ID_ENV`, `PROMOTE_ENV`.
+`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`, `PARENT_ID_ENV`, `PROMOTE_ENV`,
+`ROADMAP_STEP_ENV`, `ROADMAP_OWNER_ENV`, `ROADMAP_TARGET_DATE_ENV`,
+`ROADMAP_TYPE_ENV`.
 
 The decision-making logic lives in :func:`define_item` (pure — takes dicts,
 returns dicts) so it can be unit-tested without touching the filesystem;
@@ -430,6 +432,15 @@ def main():
             ),
             parent_id=os.environ.get("PARENT_ID_ENV") or None,
             promote=os.environ.get("PROMOTE_ENV", "") == "1",
+            roadmap_step=(
+                {
+                    "step": os.environ.get("ROADMAP_STEP_ENV", ""),
+                    "owner": os.environ.get("ROADMAP_OWNER_ENV", ""),
+                    "target_date": os.environ.get("ROADMAP_TARGET_DATE_ENV", ""),
+                    "type": os.environ.get("ROADMAP_TYPE_ENV", ""),
+                }
+                if os.environ.get("ROADMAP_STEP_ENV") else None
+            ),
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)
