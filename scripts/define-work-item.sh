@@ -61,6 +61,20 @@
 #                                 close-checkpoint records this after a
 #                                 successful external-write batch. Never
 #                                 reset by an unrelated reshape.
+#   --open-episode <session-id>   ADH-011: explicit opt-in. Reopen this item
+#                                 as a new episode (session id is normally
+#                                 <item-id>--e<N>) — appends to sessions[],
+#                                 sets status to "in progress", records a
+#                                 "reopened as episode N" history entry.
+#                                 Errors if the last episode is still open.
+#   --close-episode <session-id>  ADH-011: explicit opt-in, requires
+#                                 --outcome. Closes the matching sessions[]
+#                                 entry (found by session id); when
+#                                 --outcome is "done", also sets the item's
+#                                 status to "done". This is how a session
+#                                 close reaches "done" post-ADH-008 — no
+#                                 other flag does.
+#   --outcome <done|stopped|paused>  Required companion to --close-episode.
 #   --work-sessions-repo <path>   Default: sibling ../work-sessions of this
 #                                 repo.
 #   -h, --help                    Show this help.
@@ -100,6 +114,9 @@ EVENT_BY=""
 CURRENT_STATE_DESCRIPTION=""
 CURRENT_STATE_BLOCKED=0
 LAST_SYNCED=""
+OPEN_EPISODE=""
+CLOSE_EPISODE=""
+OUTCOME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -116,6 +133,9 @@ while [[ $# -gt 0 ]]; do
     --current-state)          needval "$@"; CURRENT_STATE_DESCRIPTION="$2"; shift 2 ;;
     --blocked)                CURRENT_STATE_BLOCKED=1; shift ;;
     --last-synced)            needval "$@"; LAST_SYNCED="$2"; shift 2 ;;
+    --open-episode)            needval "$@"; OPEN_EPISODE="$2"; shift 2 ;;
+    --close-episode)            needval "$@"; CLOSE_EPISODE="$2"; shift 2 ;;
+    --outcome)                   needval "$@"; OUTCOME="$2"; shift 2 ;;
     --work-sessions-repo)     needval "$@"; WORK_SESSIONS_REPO="$2"; shift 2 ;;
     -*)                       die "unknown option: $1 (try --help)" ;;
     *)                        [[ -z "$ITEM_ID" ]] && ITEM_ID="$1" || die "unexpected arg: $1"; shift ;;
@@ -124,6 +144,7 @@ done
 
 [[ -n "$ITEM_ID" ]] || { usage; exit 2; }
 [[ -d "$WORK_SESSIONS_REPO" ]] || die "work-sessions repo not found at: $WORK_SESSIONS_REPO (pass --work-sessions-repo)"
+[[ -n "$CLOSE_EPISODE" && -z "$OUTCOME" ]] && die "--close-episode requires --outcome <done|stopped|paused>"
 
 ITEMS_DIR="$WORK_SESSIONS_REPO/work/items"
 mkdir -p "$ITEMS_DIR"
@@ -183,6 +204,7 @@ RECORD_EVENT_ENV="$RECORD_EVENT" EVENT_BY_ENV="$EVENT_BY" \
 CURRENT_STATE_DESCRIPTION_ENV="$CURRENT_STATE_DESCRIPTION" \
 CURRENT_STATE_BLOCKED_ENV="$CURRENT_STATE_BLOCKED" \
 LAST_SYNCED_ENV="$LAST_SYNCED" \
+OPEN_EPISODE_ENV="$OPEN_EPISODE" CLOSE_EPISODE_ENV="$CLOSE_EPISODE" OUTCOME_ENV="$OUTCOME" \
 python3 "$SCRIPT_DIR/lib/define_work_item.py" || die "failed to define item $ITEM_ID"
 
 err ">> wrote $ITEM_FILE"

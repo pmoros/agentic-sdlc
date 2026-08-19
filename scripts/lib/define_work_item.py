@@ -21,7 +21,10 @@ Behaviour:
 Inputs come from the environment (set by define-work-item.sh) so nothing has
 to be shell-quoted, mirroring scripts/lib/upsert_wip.py's convention:
 `ITEM_ID_ENV`, `ITEM_FILE_ENV`, `TITLE_ENV`, `DESCRIPTION_ENV`, `STATUS_ENV`,
-`PRIORITY_ENV`, `SCOPE_ENV`, `TICKET_ENV`, `TASK_TYPE_ENV`, `NOW_ENV`.
+`PRIORITY_ENV`, `SCOPE_ENV`, `TICKET_ENV`, `TASK_TYPE_ENV`, `NOW_ENV`,
+`RECORD_EVENT_ENV`, `EVENT_BY_ENV`, `CURRENT_STATE_DESCRIPTION_ENV`,
+`CURRENT_STATE_BLOCKED_ENV`, `LAST_SYNCED_ENV`, `OPEN_EPISODE_ENV`,
+`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`.
 
 The decision-making logic lives in :func:`define_item` (pure — takes dicts,
 returns dicts) so it can be unit-tested without touching the filesystem;
@@ -295,6 +298,11 @@ def main():
             current_state_description=os.environ.get("CURRENT_STATE_DESCRIPTION_ENV") or None,
             current_state_blocked=os.environ.get("CURRENT_STATE_BLOCKED_ENV", "") == "1",
             last_synced=os.environ.get("LAST_SYNCED_ENV") or None,
+            open_episode=os.environ.get("OPEN_EPISODE_ENV") or None,
+            close_episode=(
+                (os.environ.get("CLOSE_EPISODE_ENV"), os.environ.get("OUTCOME_ENV", ""))
+                if os.environ.get("CLOSE_EPISODE_ENV") else None
+            ),
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)

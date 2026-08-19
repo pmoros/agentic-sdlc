@@ -95,6 +95,30 @@ class DefineWorkItem(TempRepoCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.read_item("ADH-9")["last_synced"], "2026-08-19T00:00:00Z")
 
+    def test_open_episode_flag_appends_a_new_episode(self):
+        self.define("ADH-4", ["--description", "d", "--status", "done"])
+        r = self.define("ADH-4", ["--open-episode", "ADH-4--e2"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-4")
+        self.assertEqual(len(item["sessions"]), 2)
+        self.assertEqual(item["sessions"][1]["episode_id"], "ADH-4--e2")
+        self.assertEqual(item["status"], "in progress")
+
+    def test_close_episode_requires_outcome(self):
+        self.define("ADH-4", ["--description", "d"])
+        r = self.define("ADH-4", ["--close-episode", "ADH-4"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("--outcome", r.stderr)
+
+    def test_close_episode_flag_sets_outcome_and_status(self):
+        self.define("ADH-4", ["--description", "d", "--status", "in progress"])
+        r = self.define("ADH-4", ["--close-episode", "ADH-4", "--outcome", "done"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-4")
+        self.assertEqual(item["status"], "done")
+        self.assertEqual(item["sessions"][0]["outcome"], "done")
+        self.assertIn("ADH-4", self.read_view("archive.json"))
+
     def test_releases_lock_after_success(self):
         self.define("ADH-9", ["--description", "d"])
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-9.json.lock")))
