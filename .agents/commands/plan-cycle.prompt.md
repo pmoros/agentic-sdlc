@@ -25,6 +25,15 @@ Read:
 Ask the user for the **cycle length / horizon** (e.g. next 2 weeks) and any
 **fixed commitments or dates** (scheduled changes, deadlines, on-call).
 
+**Reconcile before you plan (avoid rework).** Before ranking or creating
+anything, reconcile the candidates against what already exists — search live
+Jira and `wip.json`/sessions for work that is a **duplicate**, is
+**superseded**, is **already delivered** (merged but still open), or is
+**already owned by someone else**. Close/merge duplicates, reuse the existing
+ticket instead of creating a new one, and re-status "done-but-open" items.
+Planning on top of stale or duplicated tickets is the most common source of
+rework — do this reconciliation first, not after the plan is written.
+
 ## Step 2 — Prioritize
 
 Rank candidate items by **priority** (Jira scale) and business impact, tempered
