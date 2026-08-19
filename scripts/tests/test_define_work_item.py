@@ -232,6 +232,191 @@ class LastSyncedWatermark(unittest.TestCase):
         self.assertEqual(item["history"][-1]["action"], "session ended")
 
 
+class EpisodeLifecycle(unittest.TestCase):
+    """ADH-011: reopen a done/on-hold/in-review item as a new episode.
+    `sessions[]` entries use the shape ADH-008's migrate_items.py already
+    shipped (episode_id/episode_number/folder/opened/closed), extended with
+    one new `outcome` field — see SPEC.md sec.2. Both flags are the same
+    opt-in pattern as record_event/current_state: an ordinary reshape call
+    never touches sessions[]."""
+
+    def _populated(self, status="done", closed="2026-08-01T00:00:00Z", outcome=None):
+        entry = {
+            "episode_id": "ADH-4", "episode_number": 1,
+            "folder": "sessions/ADH-4", "opened": "2026-07-01T00:00:00Z",
+            "closed": closed,
+        }
+        if outcome is not None:
+            entry["outcome"] = outcome
+        return {
+            "id": "ADH-4", "title": "t", "description": "d", "status": status,
+            "current_state": {"description": "d", "is_blocked": False},
+            "history": [{"action": "item defined", "timestamp": "2026-07-01T00:00:00Z", "by": "x"}],
+            "sessions": [entry],
+        }
+
+    def _structurally_empty(self, status="in progress"):
+        return {
+            "id": "ADH-9", "title": "t", "description": "d", "status": status,
+            "current_state": {"description": "d", "is_blocked": False},
+            "history": [
+                {"action": "item defined", "timestamp": "2026-07-01T00:00:00Z", "by": "x"},
+                {"action": "session started", "timestamp": "2026-07-01T00:05:00Z", "by": "x"},
+            ],
+            "sessions": [],
+        }
+
+    # -- open_episode: already-populated item (ADH-004 acceptance scenario) --
+
+    def test_open_episode_appends_episode_2_to_populated_sessions(self):
+        item = D.define_item(
+            self._populated(), item_id="ADH-4", open_episode="ADH-4--e2", now=NOW)
+        self.assertEqual(len(item["sessions"]), 2)
+        first, second = item["sessions"]
+        self.assertEqual(first["episode_number"], 1)
+        self.assertEqual(first["closed"], "2026-08-01T00:00:00Z")
+        self.assertEqual(second, {
+            "episode_id": "ADH-4--e2", "episode_number": 2,
+            "folder": "sessions/ADH-4--e2", "opened": NOW,
+            "closed": None, "outcome": None,
+        })
+
+    def test_open_episode_sets_status_in_progress_and_records_history(self):
+        item = D.define_item(
+            self._populated(), item_id="ADH-4", open_episode="ADH-4--e2", now=NOW)
+        self.assertEqual(item["status"], "in progress")
+        self.assertEqual(item["history"][-1]["action"], "reopened as episode 2")
+        self.assertEqual(item["history"][-1]["timestamp"], NOW)
+
+    def test_open_episode_normalizes_missing_outcome_key_to_null_without_migration(self):
+        # The 12 already-migrated live items have no `outcome` key at all.
+        item = D.define_item(
+            self._populated(outcome=None), item_id="ADH-4",
+            open_episode="ADH-4--e2", now=NOW)
+        self.assertIsNone(item["sessions"][0]["outcome"])
+
+    def test_open_episode_refuses_when_last_episode_still_open(self):
+        item_with_open_episode = self._populated(closed=None)
+        with self.assertRaises(ValueError):
+            D.define_item(
+                item_with_open_episode, item_id="ADH-4",
+                open_episode="ADH-4--e2", now=NOW)
+
+    def test_open_episode_numbering_continues_past_two(self):
+        existing = self._populated()
+        existing["sessions"].append({
+            "episode_id": "ADH-4--e2", "episode_number": 2,
+            "folder": "sessions/ADH-4--e2", "opened": "2026-08-05T00:00:00Z",
+            "closed": "2026-08-06T00:00:00Z", "outcome": "done",
+        })
+        item = D.define_item(existing, item_id="ADH-4", open_episode="ADH-4--e3", now=NOW)
+        self.assertEqual(item["sessions"][-1]["episode_number"], 3)
+
+    # -- open_episode: structurally-empty sessions[] (defensive branch, --
+    # currently unreachable by any live item, per Gate A round 2) --
+
+    def test_open_episode_backfills_episode_1_when_structurally_empty(self):
+        item = D.define_item(
+            self._structurally_empty(status="done"), item_id="ADH-9",
+            open_episode="ADH-9--e2", now=NOW)
+        self.assertEqual(len(item["sessions"]), 2)
+        backfilled = item["sessions"][0]
+        self.assertEqual(backfilled["episode_id"], "ADH-9")
+        self.assertEqual(backfilled["episode_number"], 1)
+        self.assertEqual(backfilled["folder"], "sessions/ADH-9")
+        self.assertEqual(backfilled["opened"], "2026-07-01T00:00:00Z")
+        self.assertEqual(backfilled["closed"], "2026-07-01T00:05:00Z")
+        self.assertEqual(backfilled["outcome"], "done")
+        self.assertEqual(item["sessions"][1]["episode_number"], 2)
+
+    def test_open_episode_backfill_refuses_when_item_still_in_progress(self):
+        # status "in progress" -> backfilled episode 1 has closed=None ->
+        # last-episode-still-open guard correctly refuses.
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._structurally_empty(status="in progress"), item_id="ADH-9",
+                open_episode="ADH-9--e2", now=NOW)
+
+    # -- close_episode: already-populated item, matching by episode_id
+    # (IO-101 acceptance scenario) --
+
+    def test_close_episode_closes_matching_entry_and_sets_status_done(self):
+        item = D.define_item(
+            self._populated(status="in progress", closed=None), item_id="ADH-4",
+            close_episode=("ADH-4", "done"), now=NOW)
+        self.assertEqual(item["sessions"][0]["closed"], NOW)
+        self.assertEqual(item["sessions"][0]["outcome"], "done")
+        self.assertEqual(item["status"], "done")
+
+    def test_close_episode_with_non_done_outcome_leaves_status_untouched(self):
+        item = D.define_item(
+            self._populated(status="on hold", closed=None), item_id="ADH-4",
+            close_episode=("ADH-4", "paused"), now=NOW)
+        self.assertEqual(item["sessions"][0]["outcome"], "paused")
+        self.assertEqual(item["status"], "on hold")
+
+    def test_close_episode_records_history(self):
+        item = D.define_item(
+            self._populated(status="in progress", closed=None), item_id="ADH-4",
+            close_episode=("ADH-4", "done"), event_by="end_work_session.prompt.md", now=NOW)
+        self.assertEqual(item["history"][-1]["action"], "closed episode 1 (outcome: done)")
+        self.assertEqual(item["history"][-1]["by"], "end_work_session.prompt.md")
+
+    def test_close_episode_raises_when_no_matching_episode_id(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._populated(status="in progress", closed=None), item_id="ADH-4",
+                close_episode=("ADH-4--e7", "done"), now=NOW)
+
+    def test_close_episode_rejects_unknown_outcome(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._populated(status="in progress", closed=None), item_id="ADH-4",
+                close_episode=("ADH-4", "dun"), now=NOW)
+
+    def test_close_episode_every_documented_outcome_is_accepted(self):
+        for outcome in ("done", "stopped", "paused"):
+            item = D.define_item(
+                self._populated(status="in progress", closed=None), item_id="ADH-4",
+                close_episode=("ADH-4", outcome), now=NOW)
+            self.assertEqual(item["sessions"][0]["outcome"], outcome)
+
+    def test_close_episode_refuses_to_close_an_older_episode_out_of_order(self):
+        existing = self._populated(status="in progress", closed="2026-08-05T00:00:00Z")
+        existing["sessions"][0]["outcome"] = "done"
+        existing["sessions"].append({
+            "episode_id": "ADH-4--e2", "episode_number": 2,
+            "folder": "sessions/ADH-4--e2", "opened": "2026-08-10T00:00:00Z",
+            "closed": None, "outcome": None,
+        })
+        # Episode 2 is the open one -- closing episode 1 (already closed,
+        # and no longer the last episode) must be refused, not silently
+        # re-applied.
+        with self.assertRaises(ValueError):
+            D.define_item(existing, item_id="ADH-4", close_episode=("ADH-4", "done"), now=NOW)
+
+    def test_close_episode_requires_outcome(self):
+        with self.assertRaises(ValueError):
+            D.define_item(
+                self._populated(status="in progress", closed=None), item_id="ADH-4",
+                close_episode=("ADH-4", ""), now=NOW)
+
+    # -- close_episode: structurally-empty sessions[] (defensive branch —
+    # closing episode 1 for an item that has never been reopened and
+    # predates ADH-008's migration entirely, e.g. a fresh item created
+    # after ADH-011 ships but before its first close) --
+
+    def test_close_episode_backfills_and_closes_episode_1_when_structurally_empty(self):
+        item = D.define_item(
+            self._structurally_empty(status="in progress"), item_id="ADH-9",
+            close_episode=("ADH-9", "done"), now=NOW)
+        self.assertEqual(len(item["sessions"]), 1)
+        self.assertEqual(item["sessions"][0]["episode_id"], "ADH-9")
+        self.assertEqual(item["sessions"][0]["closed"], NOW)
+        self.assertEqual(item["sessions"][0]["outcome"], "done")
+        self.assertEqual(item["status"], "done")
+
+
 class LegacyItemsWithoutSessionsField(unittest.TestCase):
     """Real existing items (pre-migration shape) have no `sessions` key."""
 

@@ -58,6 +58,7 @@ TICKET=""
 SCOPE=""
 TASK_TYPE=""
 BLOCKERS=""
+REOPEN_ITEM=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -67,6 +68,7 @@ while [[ $# -gt 0 ]]; do
     --scope)                needval "$@"; SCOPE="$2"; shift 2 ;;
     --task-type)            needval "$@"; TASK_TYPE="$2"; shift 2 ;;
     --blockers)              needval "$@"; BLOCKERS="$2"; shift 2 ;;
+    --reopen-item)            needval "$@"; REOPEN_ITEM="$2"; shift 2 ;;
     --work-sessions-repo)   needval "$@"; WORK_SESSIONS_REPO="$2"; shift 2 ;;
     --agentic-sdlc-repo)    needval "$@"; AGENTIC_SDLC_REPO="$2"; shift 2 ;;
     -*)                     die "unknown option: $1 (try --help)" ;;
@@ -74,10 +76,34 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$SESSION_ID" ]] || { usage; exit 2; }
+# --reopen-item: the session id (episode N's) can't be known until we've
+# read the item's existing sessions[] (below), so a positional arg isn't
+# meaningful in this mode — ignore it rather than requiring callers to
+# invent a placeholder.
+[[ -n "$REOPEN_ITEM" || -n "$SESSION_ID" ]] || { usage; exit 2; }
 [[ -n "$GOAL" ]] || die "--goal is required"
 [[ -d "$WORK_SESSIONS_REPO/.git" ]] || die "work-sessions repo not found at: $WORK_SESSIONS_REPO (pass --work-sessions-repo)"
 [[ -d "$AGENTIC_SDLC_REPO/.git" ]] || die "agentic-sdlc repo not found at: $AGENTIC_SDLC_REPO (pass --agentic-sdlc-repo)"
+
+# --- ADH-011: resolve the episode session id for --reopen-item ---------
+# The item file must already exist — reopening a nonexistent item is a
+# contradiction, not a fallback-to-create (that's the plain, no-flag path).
+# Episode numbering matches define_work_item.py's own max(episode_number)+1
+# rule exactly (a structurally-empty sessions[] counts as implicit episode
+# 1) so the id computed here is always the one --open-episode will use.
+if [[ -n "$REOPEN_ITEM" ]]; then
+  REOPEN_ITEM_FILE="$WORK_SESSIONS_REPO/work/items/$REOPEN_ITEM.json"
+  [[ -f "$REOPEN_ITEM_FILE" ]] \
+    || die "cannot reopen $REOPEN_ITEM: no item file found at $REOPEN_ITEM_FILE (reopening a nonexistent item is not supported — start a normal session instead)"
+  NEXT_EPISODE="$(python3 -c "
+import json
+d = json.load(open('$REOPEN_ITEM_FILE'))
+nums = [e.get('episode_number', 1) for e in (d.get('sessions') or [])]
+print((max(nums) if nums else 1) + 1)
+")"
+  SESSION_ID="${REOPEN_ITEM}--e${NEXT_EPISODE}"
+  err ">> reopening $REOPEN_ITEM as episode $NEXT_EPISODE ($SESSION_ID)"
+fi
 
 TEMPLATE_DIR="$WORK_SESSIONS_REPO/session-template"
 [[ -d "$TEMPLATE_DIR" ]] || die "session-template not found at: $TEMPLATE_DIR"
@@ -193,12 +219,18 @@ TMUX_NAME="$("$SCRIPT_DIR/session-tmux.sh" name "$SESSION_ID")"
 printf -- '- %s session initialized (tmux: %s)\n' "$NOW" "$TMUX_NAME" >> "$CONTEXT"
 
 # --- register in SESSIONS_STATE.md --------------------------------------
+# ADH-011: every row now carries an Item column — the underlying item id,
+# which equals the Session ID for an ordinary (episode-1) session, and the
+# reopened item's id (without the --eN suffix) for an episode row. This
+# makes every episode of the same item joinable by that column regardless
+# of which row you're looking at.
 STATE="$WORK_SESSIONS_REPO/SESSIONS_STATE.md"
 [[ -f "$STATE" ]] || die "SESSIONS_STATE.md not found at: $STATE"
-ROW="| $SESSION_ID | $GOAL | $TMUX_NAME | sessions/$SESSION_ID | $TODAY | $TODAY | active |"
+ITEM_ID_FOR_ROW="${REOPEN_ITEM:-$SESSION_ID}"
+ROW="| $SESSION_ID | $ITEM_ID_FOR_ROW | $GOAL | $TMUX_NAME | sessions/$SESSION_ID | $TODAY | $TODAY | active |"
 
 if grep -q '^| _none yet_' "$STATE"; then
-  sed "s#| _none yet_ | | | | | | |#$(sed_repl "$ROW")#" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+  sed "s#| _none yet_ | | | | | | | |#$(sed_repl "$ROW")#" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
 else
   # Insert the new row right after the header separator line (the first
   # `|---|...` line in the file).
@@ -217,7 +249,17 @@ err ">> registered $SESSION_ID in $STATE"
 # separately from #triage-inbox and had already diverged from it (ADH-008).
 # (The migration safety guard for this step already ran above, before any
 # side effect, in case it needed to refuse.)
-if [[ -f "$WIP_JSON" || -d "$ITEMS_DIR" ]]; then
+if [[ -n "$REOPEN_ITEM" ]]; then
+  # ADH-011: this is a new episode of an EXISTING item — the item file is
+  # keyed by $REOPEN_ITEM, never by $SESSION_ID (which carries the --eN
+  # suffix and must never become a second item file). --open-episode
+  # appends to sessions[], flips status to "in progress", and records its
+  # own "reopened as episode N" history entry — no --record-event needed.
+  "$SCRIPT_DIR/define-work-item.sh" "$REOPEN_ITEM" --open-episode "$SESSION_ID" \
+    --work-sessions-repo "$WORK_SESSIONS_REPO" \
+    || die "failed to reopen $REOPEN_ITEM as episode via $SESSION_ID"
+  err ">> reopened $REOPEN_ITEM in $REOPEN_ITEM_FILE (new episode: $SESSION_ID)"
+elif [[ -f "$WIP_JSON" || -d "$ITEMS_DIR" ]]; then
   ITEM_FILE="$ITEMS_DIR/$SESSION_ID.json"
   ALREADY_ACTIVE=0
   if [[ -f "$ITEM_FILE" ]]; then

@@ -95,9 +95,9 @@ _CONTEXT_TEMPLATE = """# Context
 
 _SESSIONS_STATE = """# Sessions State
 
-| Session ID | Title | Tmux Session | Session Folder | Created | Last Change | Status |
-|---|---|---|---|---|---|---|
-| _none yet_ | | | | | | |
+| Session ID | Item | Title | Tmux Session | Session Folder | Created | Last Change | Status |
+|---|---|---|---|---|---|---|---|
+| _none yet_ | | | | | | | |
 """
 
 

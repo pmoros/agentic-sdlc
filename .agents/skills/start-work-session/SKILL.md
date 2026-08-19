@@ -72,8 +72,30 @@ Ask the user each of the following in sequence. Wait for all answers before proc
 #### Determine the Session ID
 
 After collecting question 2:
-- **Ticket provided:** extract the key from the ticket ID or URL (e.g. `PROJ-6025` from `https://yourcompany.atlassian.net/browse/PROJ-6025`). Use that key as the Session ID.
-- **No ticket:** read `<work-sessions-repo>/SESSIONS_STATE.md` (sibling `../work-sessions` of this repo) and find the highest existing `ADH-NNN` number. Increment by 1. If none exist, assign `ADH-001`.
+- **Ticket provided:** extract the key from the ticket ID or URL (e.g. `PROJ-6025` from `https://yourcompany.atlassian.net/browse/PROJ-6025`). Use that key as the Session ID candidate.
+- **No ticket:** ask: "Reopening a previous ADH item (paste its id), or starting something new? Press Enter for new." If an id is named, use it as the Session ID candidate. Otherwise read `<work-sessions-repo>/SESSIONS_STATE.md` (sibling `../work-sessions` of this repo), find the highest existing `ADH-NNN` number, and increment by 1 (`ADH-001` if none exist) — this freshly-assigned number can never collide with an existing item, so skip the reopen check below for it.
+
+#### Reopen check (ADH-011)
+
+For a candidate id that came from an existing ticket or a user-named
+previous item (not a freshly-assigned `ADH-NNN`), check whether
+`<work-sessions-repo>/work/items/<candidate-id>.json` already exists:
+
+- **Absent, or `status: grooming`/`ready`** — normal first pickup (a
+  never-started or freshly-groomed item). Proceed below exactly as before;
+  the candidate id is the Session ID directly, no reopen involved.
+- **`status: done`/`on hold`/`in review`** — this item has already been
+  worked. Show its last few `history` entries and current `sessions[]`
+  state, and ask: *"This item was already worked as [N prior episode(s)] —
+  start a new episode, or is this actually a different piece of work (pick
+  a different id)?"* On confirm, this is a **reopen**: step 4 passes
+  `--reopen-item <candidate-id>` to `initialize_work_session_folder`
+  instead of the normal goal/ticket/scope path — the actual session id
+  used (`<candidate-id>--eN`) is computed by the script itself, not by this
+  step.
+- **`status: in progress`** — this item already has a live, unclosed
+  session. This isn't a reopen — direct the user to `#resume_work_session`
+  instead.
 
 #### Ticket creation (only when question 2 = `new`)
 
@@ -105,7 +127,18 @@ Show the constructed branch name and ask: "Confirm branch name or edit:"
 The session folder name is the branch slug without the type prefix (e.g.
 `feat/PROJ-6025-webflow-geo-tracking` → `PROJ-6025-webflow-geo-tracking`).
 
+**On a reopen** (the check above found one), skip this branch-naming
+derivation entirely — the session id is `<candidate-id>--eN`, computed by
+`init-session.sh` itself from the item's existing `sessions[]` (never from
+type/description), and the branch name should simply incorporate that same
+id (e.g. `feat/<candidate-id>--e2-<short-note>`) rather than a fresh slug.
+
 ### 4. Initialize the session folder
+
+**On a reopen**, invoke `initialize_work_session_folder` with
+`--reopen-item <candidate-id>` (plus the goal/scope this conversation
+gathered) instead of the normal ticket/description path — see
+`initialize_work_session_folder.prompt.md`'s own reopen handling. Otherwise:
 
 Invoke `initialize_work_session_folder` with the gathered session ID, goal,
 ticket, scope, task type, and blockers. This creates

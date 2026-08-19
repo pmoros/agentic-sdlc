@@ -39,7 +39,7 @@ State lives in two places:
 | `WORKLOG.md` | Append-only log of lifetime events | Session started/paused/resumed/stopped/ended, PR opened, deployment run, major decision. Append via `scripts/session-log.sh`. |
 | `PLAN.md` | Strategy: goal, approach, milestones, risks | When the goal/approach/milestones/risks change — not per small step. |
 | `SPEC.md` | Tactical design: problem, design, interfaces/contracts, out-of-scope | When the design or a contract is defined or changes. Per design-first doctrine, fill it *before* implementing. |
-| `work/items/<id>.json` (this item) | `status`, `current_state`, `tickets`, append-only `history`, `roadmap`, `last_synced` (ADH-008 Phase 8 watermark) | **Seeded at session start** via `define-work-item.sh` (see below), then as work progresses — flip `status`, refresh `current_state`, append a `history` entry per significant action, update `roadmap`. `backlog.json`/`wip.json`/`archive.json` are generated views over this — never edit them directly. `last_synced` only moves at `#end_work_session`'s batched close-checkpoint, after every external write in the batch succeeds. |
+| `work/items/<id>.json` (this item) | `status`, `current_state`, `tickets`, append-only `history`, `roadmap`, `sessions[]` (ADH-011 episode records), `last_synced` (ADH-008 Phase 8 watermark) | **Seeded at session start** via `define-work-item.sh` (see below), then as work progresses — flip `status`, refresh `current_state`, append a `history` entry per significant action, update `roadmap`. `backlog.json`/`wip.json`/`archive.json` are generated views over this — never edit them directly. `sessions[]` only moves via `--open-episode`/`--close-episode` (ADH-011 §"Reopening a done item" below) — never a plain reshape call. `last_synced` only moves at `#end_work_session`'s batched close-checkpoint, after every external write in the batch succeeds. |
 | `work/backlog.json` | Groomed items not yet picked up (generated view — see above) | Regenerated automatically on every `work/items/*.json` write; never edit directly. |
 | `work/scratchpad.json` | Ad-hoc / ticketless exploration | When doing ticketless investigation that isn't a full session. |
 | `work/INBOX.md` | Raw unsorted capture | Immediately when something comes in ad-hoc — capture first, shape later. |
@@ -48,8 +48,14 @@ State lives in two places:
 ## Session start ⇔ item store is mandatory and automated
 
 **Every started session has a matching `in progress` item in
-`work/items/<id>.json`, keyed by the session id — no exceptions.** This
-linkage is not left to the agent to remember: `#initialize_work_session_folder`
+`work/items/<id>.json`, keyed by the session id.** For a session's first
+episode this holds exactly (`item id == session id`); **the one exception is
+a reopened episode ≥2** (ADH-011, see the dedicated section below), where the
+session id carries a `--eN` suffix (`<item-id>--e2`) but the item file
+itself is always `work/items/<item-id>.json` — never a per-episode file. Any
+command that reads/writes the item from a session id must strip that suffix
+first (`end_work_session.prompt.md` does this at both of its item-touching
+steps). This linkage is not left to the agent to remember: `#initialize_work_session_folder`
 (via `scripts/init-session.sh`) registers it automatically at session start,
 through the one canonical constructor, `scripts/define-work-item.sh`:
 
@@ -90,6 +96,38 @@ per-item file + lock model above is structurally immune to this — two
 different items' writes never contend, and same-item writes serialize
 through the lock instead of racing on a shared read-modify-write.
 
+## Reopening a done item (episode identity, ADH-011)
+
+An item's `status` reaching `done` is itself new as of ADH-011 —
+`#end_work_session` is the only caller that ever sets it, via
+`define-work-item.sh --close-episode <session-id> --outcome done`
+(everything before this only ever left a closed session's item stuck at
+`in progress` forever). Once an item is `done`/`on hold`/`in review`,
+picking it back up is a **reopen**, not a fresh session start:
+
+- `start-work-session` offers the reopen when the target id already has a
+  non-fresh item (see the skill's own "Reopen check" step) rather than
+  silently reactivating it.
+- The new episode gets its own session id (`<item-id>--eN`, computed by
+  `init-session.sh --reopen-item <item-id>` as `max(existing
+  sessions[].episode_number) + 1`) and its own full session folder/
+  worktree(s)/branch — same shape as any other session.
+- The item file is **never** duplicated — `--open-episode`/`--close-episode`
+  both write `work/items/<item-id>.json`, appending to its `sessions[]`
+  array (`{episode_id, episode_number, folder, opened, closed, outcome}`)
+  rather than creating a second file.
+- `SESSIONS_STATE.md` has one row per episode (an episode already gets its
+  own folder), joined by an `Item` column — `= Session ID` for an ordinary
+  session, `= <item-id>` for a `--eN` row.
+- `sessions[]` needed no migration for the 21 items ADH-008 originally
+  migrated: 12 of them already got a real episode-1 entry from that
+  migration itself, and the other 9 (never-started backlog items) simply
+  stay structurally empty until their first reopen, which lazily backfills
+  episode 1 from `history` at that point.
+
+See `work-sessions/sessions/ADH-011-episode-identity/SPEC.md` for the full
+design and the acceptance scenarios worked through against real live items.
+
 ## Update discipline
 
 - **Append-only, never rewrite history:** `CONTEXT.md`'s Activity log,
@@ -103,11 +141,12 @@ through the lock instead of racing on a shared read-modify-write.
   direction through defined sync points, not an obligation to keep three
   views in lockstep. `CONTEXT.md`'s Current state is the continuously
   updated, high-frequency narrative — update it live, as often as reality
-  changes. `work/items/<id>.json`'s `status`/`current_state` only move at
-  discrete lifecycle events (session start; `#end_work_session`'s
-  close-checkpoint; an explicit `define-work-item.sh --status`/
-  `--current-state` call) — never hand-edited, always through the
-  constructor's own locked write path, which also regenerates
+  changes. `work/items/<id>.json`'s `status`/`current_state`/`sessions[]`
+  only move at discrete lifecycle events (session start; `#end_work_session`'s
+  close-checkpoint, now via `--close-episode`; a reopen, via `--open-episode`;
+  an explicit `define-work-item.sh --status`/`--current-state` call) — never
+  hand-edited, always through the constructor's own locked write path, which
+  also regenerates
   `backlog.json`/`wip.json`/`archive.json`. `SESSIONS_STATE.md`'s `Status`
   column is set by the same lifecycle commands at those same points. Each
   hop has one writer; get the event recorded at its natural sync point and
