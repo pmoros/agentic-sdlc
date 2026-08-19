@@ -71,11 +71,57 @@ def _seed_title(description, task_type):
     return description
 
 
+_CLOSED_LIKE_STATUSES = {"done", "on hold", "in review"}
+
+
+def _ensure_episode_1(item, now):
+    """Return ``item``'s ``sessions[]``, normalized: every entry gets an
+    explicit ``outcome`` key (defaulting to ``None`` — the already-shipped
+    ADH-008 migration entries have no such key at all, and this is the only
+    "migration" they get, applied lazily on read rather than rewritten
+    up front). If ``sessions[]`` is structurally empty (an item that never
+    had a SESSIONS_STATE.md row at ADH-008 migration time — see SPEC.md
+    sec.2; currently unreachable by any live item through the designed
+    reopen entry point, but a real defensive case), synthesize episode 1's
+    entry from the item's own ``history`` first.
+
+    Never mutates ``item`` or its nested dicts — returns a new list of new
+    dicts, matching this module's pure-function-in/out discipline."""
+    sessions = item.get("sessions") or []
+    if sessions:
+        return [dict(e, outcome=e.get("outcome")) for e in sessions]
+
+    history = item.get("history") or []
+    opened = None
+    for h in history:
+        if h.get("action") in ("item defined", "session started"):
+            opened = h.get("timestamp")
+            break
+
+    status = item.get("status")
+    closed = None
+    outcome = None
+    if status in _CLOSED_LIKE_STATUSES:
+        outcome = status
+        if history:
+            closed = history[-1].get("timestamp")
+
+    item_id = item.get("id")
+    return [{
+        "episode_id": item_id,
+        "episode_number": 1,
+        "folder": f"sessions/{item_id}",
+        "opened": opened,
+        "closed": closed,
+        "outcome": outcome,
+    }]
+
+
 def define_item(existing, *, item_id, title=None, description=None, status=None,
                  priority=None, scope=None, ticket=None, task_type=None, now=None,
                  record_event=None, event_by="define-work-item.sh",
                  current_state_description=None, current_state_blocked=False,
-                 last_synced=None):
+                 last_synced=None, open_episode=None, close_episode=None):
     """Return the shaped item dict for ``item_id``, merged onto ``existing``
     (``None`` for a brand new item). Pure — no I/O.
 
@@ -96,6 +142,15 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
     (``#end_work_session.prompt.md``, ADH-008 Phase 8) — set only when
     explicitly passed; absent/unset otherwise, and never reset by an
     unrelated reshape.
+
+    ``open_episode``/``close_episode`` (ADH-011): the same opt-in pattern as
+    ``record_event``/``current_state_*`` — an ordinary reshape call never
+    touches ``sessions[]``. ``open_episode`` is the new episode's session id
+    (``<item-id>--e<N>``); ``close_episode`` is a ``(session_id, outcome)``
+    pair. Both raise ``ValueError`` on a bad call (opening while the last
+    episode is still open; closing an outcome-less call; closing a session
+    id with no matching entry). See SPEC.md sec.2/3 for the full design,
+    including the lazy structurally-empty-sessions backfill.
     """
     is_new = existing is None
     item = dict(existing) if existing else {}
@@ -164,6 +219,49 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
 
     if last_synced is not None:
         item["last_synced"] = last_synced
+
+    if open_episode:
+        sessions = _ensure_episode_1(item, now)
+        if sessions[-1]["closed"] is None:
+            raise ValueError(
+                f"cannot open a new episode: {sessions[-1]['episode_id']!r} is still open")
+        next_number = max(e["episode_number"] for e in sessions) + 1
+        sessions.append({
+            "episode_id": open_episode,
+            "episode_number": next_number,
+            "folder": f"sessions/{open_episode}",
+            "opened": now,
+            "closed": None,
+            "outcome": None,
+        })
+        item["sessions"] = sessions
+        item["status"] = "in progress"
+        history = list(item.get("history") or [])
+        history.append({
+            "action": f"reopened as episode {next_number}",
+            "timestamp": now, "by": event_by,
+        })
+        item["history"] = history
+
+    if close_episode:
+        session_id, outcome = close_episode
+        if not outcome:
+            raise ValueError("close_episode requires a non-empty outcome")
+        sessions = _ensure_episode_1(item, now)
+        match = next((e for e in sessions if e["episode_id"] == session_id), None)
+        if match is None:
+            raise ValueError(f"no episode found for session id: {session_id!r}")
+        match["closed"] = now
+        match["outcome"] = outcome
+        item["sessions"] = sessions
+        if outcome == "done":
+            item["status"] = "done"
+        history = list(item.get("history") or [])
+        history.append({
+            "action": f"closed episode {match['episode_number']} (outcome: {outcome})",
+            "timestamp": now, "by": event_by,
+        })
+        item["history"] = history
 
     return item
 
