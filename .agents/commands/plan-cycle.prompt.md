@@ -31,17 +31,31 @@ Rank candidate items by **priority** (Jira scale) and business impact, tempered
 by dependencies and blockers. Surface conflicts explicitly (two `Critical`
 items, one person). Recommend a rank; let the user adjust.
 
+**Hierarchy roll-up (ADH-012)** — while ranking, you're already reading each
+candidate's own `work/items/<id>.json` (for priority/dependencies above); no
+second pass is needed. For any candidate that is a parent (another loaded
+item's `parent_id` points at it) or a child (has its own `parent_id`), show
+one roll-up line alongside its normal rank row: a parent gets its
+done/total count (e.g. "3/5 sub-items done"), a child names its parent.
+Read-only — nothing here is written back to any item.
+
 ## Step 3 — Break down large items
 
 For every `L`/`XL` item selected for the cycle, propose a breakdown into
 smaller, independently-shippable pieces (each ideally `S`/`M`). Big
-undecomposed items hide risk and stall. For each new sub-item, offer to create
-it via `scripts/define-work-item.sh <id> --description "..." --status grooming
---scope <XS|S|M|L|XL> [--priority ...] --work-sessions-repo <path>`
-(`backlog.json` is a generated view, never hand-written) and/or a Jira
-sub-task (guarded). For the Jira write, load
-`.agents/rules/atlassian.instructions.md` first — it is not auto-loaded and
-covers the Epic-link/parent quirks.
+undecomposed items hide risk and stall. For each new sub-item, offer to
+create it via `scripts/define-work-item.sh <id> --description "..." --status
+grooming --scope <XS|S|M|L|XL> [--priority ...] --parent <parent-id>
+--work-sessions-repo <path>` (`backlog.json` is a generated view, never
+hand-written) and/or a Jira sub-task (guarded). `--parent` (ADH-012) is what
+makes this a real, queryable link in the item store — not just the prose
+record in this cycle's plan doc (below) — and is validated before any write
+(refuses a two-level chain, a nonexistent parent, or linking an item that's
+already a parent itself; exactly one level of nesting is supported). For the
+Jira write, load `.agents/rules/atlassian.instructions.md` first — it is not
+auto-loaded and covers the Epic-link/parent quirks; note that Jira's own
+Epic-link relationship (if any) is entirely independent of the local
+`parent_id` link — this session does not sync the two.
 
 ## Step 4 — Capacity check
 
