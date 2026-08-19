@@ -149,9 +149,12 @@ Load `.agents/rules/atlassian.instructions.md` before this step.
 6. **On "yes," execute and verify each response** (per
    `atlassian.instructions.md`'s "never assume success" rule):
    - Walk the planned transition sequence **one hop at a time**. Before
-     firing each hop, re-call get-transitions to confirm it's still offered
-     from the issue's *current* state — a workflow can change out from
-     under a multi-step close (e.g. another automation firing mid-sequence).
+     firing each hop, call get-transitions to confirm it's actually offered
+     from the issue's *current* state — for hop 1 this re-confirms step 2's
+     real check; for hop 2+ this is that hop's *first* real check, since
+     step 2 could only plan them provisionally. Either way, a workflow can
+     change out from under a multi-step close (e.g. another automation
+     firing mid-sequence), so always check live immediately before firing.
      If a planned hop is no longer available, **stop the chain there**;
      still apply the comment and every Confluence update regardless. Report
      exactly which status the ticket was left at and name the remaining

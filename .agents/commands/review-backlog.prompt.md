@@ -39,9 +39,11 @@ reconcile:
 ## Step 3 — Health analysis
 
 Evaluate against the heuristics (state the thresholds you used):
-- **Stale grooming** — items in `grooming` for more than 30 days.
+- **Stale grooming** — items in `grooming` for more than 30 days, per each
+  item's own `work/items/<id>.json` `history` (age isn't in `backlog.json`).
 - **Outstanding/aging** — `ready` items that have sat un-picked-up a long time
-  (candidates to drop, re-prioritize, or schedule).
+  (candidates to drop, re-prioritize, or schedule), same per-item `history`
+  read.
 - **Roadmap gaps** — from each item's own `work/items/<id>.json` (not
   `backlog.json`, which has no `roadmap` field): items whose `roadmap` is
   empty or whose `target_date` is `TBD` (no dated commitment) or already in
