@@ -18,6 +18,14 @@
 #   slow but still-alive writer is never preempted. Single-machine liveness
 #   check only; cross-machine/networked locking is out of scope.
 #
+#   ADH-012: `--parent`/`--promote` additionally acquire a second, SHARED
+#   `work/items/.parent-link.lock/` (same mechanism, generalized) before
+#   the item's own lock — this serializes every parent-link mutation across
+#   the whole item store, closing a real multi-level-chain race that an
+#   unguarded validation read would otherwise allow between two DIFFERENT
+#   items' concurrent `--parent` calls. See
+#   work-sessions/sessions/ADH-012-epic-subitems/SPEC.md §4.
+#
 # USAGE
 #   define-work-item.sh <id> --title <t> --description <d> --status <s>
 #     [--priority <p>] [--scope <XS|S|M|L|XL>] [--ticket <id-or-url>]
@@ -75,6 +83,20 @@
 #                                 close reaches "done" post-ADH-008 — no
 #                                 other flag does.
 #   --outcome <done|stopped|paused>  Required companion to --close-episode.
+#   --parent <parent-item-id>     ADH-012: link this item as a sub-item of
+#                                 <parent-item-id> (epic-like grouping).
+#                                 Validated before any lock is acquired:
+#                                 refuses a self-parent, a nonexistent
+#                                 target, linking under an item that
+#                                 already has a parent, or linking an item
+#                                 that's already a parent to something else
+#                                 — exactly one level of nesting is
+#                                 supported. Mutually exclusive with
+#                                 --promote.
+#   --promote                     ADH-012: clear this item's parent_id
+#                                 (de-aggregate back to independent).
+#                                 Refuses if the item has no parent_id to
+#                                 clear. Mutually exclusive with --parent.
 #   --work-sessions-repo <path>   Default: sibling ../work-sessions of this
 #                                 repo.
 #   -h, --help                    Show this help.
@@ -117,6 +139,8 @@ LAST_SYNCED=""
 OPEN_EPISODE=""
 CLOSE_EPISODE=""
 OUTCOME=""
+PARENT=""
+PROMOTE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -136,6 +160,8 @@ while [[ $# -gt 0 ]]; do
     --open-episode)            needval "$@"; OPEN_EPISODE="$2"; shift 2 ;;
     --close-episode)            needval "$@"; CLOSE_EPISODE="$2"; shift 2 ;;
     --outcome)                   needval "$@"; OUTCOME="$2"; shift 2 ;;
+    --parent)                     needval "$@"; PARENT="$2"; shift 2 ;;
+    --promote)                    PROMOTE=1; shift ;;
     --work-sessions-repo)     needval "$@"; WORK_SESSIONS_REPO="$2"; shift 2 ;;
     -*)                       die "unknown option: $1 (try --help)" ;;
     *)                        [[ -z "$ITEM_ID" ]] && ITEM_ID="$1" || die "unexpected arg: $1"; shift ;;
@@ -145,11 +171,13 @@ done
 [[ -n "$ITEM_ID" ]] || { usage; exit 2; }
 [[ -d "$WORK_SESSIONS_REPO" ]] || die "work-sessions repo not found at: $WORK_SESSIONS_REPO (pass --work-sessions-repo)"
 [[ -n "$CLOSE_EPISODE" && -z "$OUTCOME" ]] && die "--close-episode requires --outcome <done|stopped|paused>"
+[[ -n "$PARENT" && "$PROMOTE" -eq 1 ]] && die "--parent and --promote are mutually exclusive"
 
 ITEMS_DIR="$WORK_SESSIONS_REPO/work/items"
 mkdir -p "$ITEMS_DIR"
 ITEM_FILE="$ITEMS_DIR/$ITEM_ID.json"
 LOCK_DIR="$ITEM_FILE.lock"
+PARENT_LOCK_DIR="$ITEMS_DIR/.parent-link.lock"
 
 TIMEOUT="${DEFINE_ITEM_LOCK_TIMEOUT_SECS:-10}"
 STALE_AFTER="${DEFINE_ITEM_LOCK_STALE_SECS:-60}"
@@ -162,39 +190,78 @@ lock_dir_mtime() {
   esac
 }
 
-LOCK_HELD=0
+# HELD_LOCKS tracks every lock dir this process currently holds, so a
+# single EXIT trap releases all of them (item lock, and — for
+# --parent/--promote — the shared parent-link lock too) regardless of how
+# many were acquired or in what order.
+HELD_LOCKS=()
 
+# acquire_lock <lock_dir> <label> — generalized so both the per-item lock
+# and ADH-012's shared parent-link lock use the exact same mkdir-based,
+# PID-liveness stale-break mechanism without duplicating it.
 acquire_lock() {
+  local lock_dir="$1" label="$2"
   local start now_ts holder_pid mtime age
   start="$(date +%s)"
-  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+  while ! mkdir "$lock_dir" 2>/dev/null; do
     holder_pid=""
-    [[ -f "$LOCK_DIR/pid" ]] && holder_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
-    mtime="$(lock_dir_mtime "$LOCK_DIR" || echo "")"
+    [[ -f "$lock_dir/pid" ]] && holder_pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+    mtime="$(lock_dir_mtime "$lock_dir" || echo "")"
     now_ts="$(date +%s)"
     if [[ -n "$mtime" ]]; then
       age=$(( now_ts - mtime ))
       if [[ "$age" -ge "$STALE_AFTER" && -n "$holder_pid" ]] && ! kill -0 "$holder_pid" 2>/dev/null; then
-        err ">> breaking stale lock (holder pid $holder_pid not running, age ${age}s): $LOCK_DIR"
-        rm -rf "$LOCK_DIR"
+        err ">> breaking stale lock (holder pid $holder_pid not running, age ${age}s): $lock_dir"
+        rm -rf "$lock_dir"
         continue
       fi
     fi
     if (( now_ts - start >= TIMEOUT )); then
-      die "timed out after ${TIMEOUT}s waiting for lock on $ITEM_ID (held by pid ${holder_pid:-unknown}): $LOCK_DIR"
+      die "timed out after ${TIMEOUT}s waiting for $label lock (held by pid ${holder_pid:-unknown}): $lock_dir"
     fi
     sleep 0.2
   done
-  echo $$ > "$LOCK_DIR/pid"
-  LOCK_HELD=1
+  echo $$ > "$lock_dir/pid"
+  HELD_LOCKS+=("$lock_dir")
 }
 
-release_lock() {
-  [[ "$LOCK_HELD" -eq 1 ]] && rm -rf "$LOCK_DIR"
+release_locks() {
+  local d
+  for d in "${HELD_LOCKS[@]:-}"; do
+    [[ -n "$d" ]] && rm -rf "$d"
+  done
 }
-trap release_lock EXIT
+trap release_locks EXIT
 
-acquire_lock
+# --- ADH-012: validate + serialize a parent-link mutation, before the
+# item's own lock is ever acquired -------------------------------------
+if [[ -n "$PARENT" ]]; then
+  acquire_lock "$PARENT_LOCK_DIR" "parent-link"
+  python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR/lib')
+from define_work_item import validate_parent_link
+try:
+    validate_parent_link('$ITEMS_DIR', '$ITEM_ID', '$PARENT')
+except ValueError as exc:
+    print(f'define-work-item: {exc}', file=sys.stderr)
+    sys.exit(1)
+" || die "parent link validation failed for $ITEM_ID -> $PARENT"
+elif [[ "$PROMOTE" -eq 1 ]]; then
+  acquire_lock "$PARENT_LOCK_DIR" "parent-link"
+  python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR/lib')
+from define_work_item import validate_promote
+try:
+    validate_promote('$ITEMS_DIR', '$ITEM_ID')
+except ValueError as exc:
+    print(f'define-work-item: {exc}', file=sys.stderr)
+    sys.exit(1)
+" || die "promote validation failed for $ITEM_ID"
+fi
+
+acquire_lock "$LOCK_DIR" "item"
 
 ITEM_ID_ENV="$ITEM_ID" ITEM_FILE_ENV="$ITEM_FILE" \
 TITLE_ENV="$TITLE" DESCRIPTION_ENV="$DESCRIPTION" STATUS_ENV="$STATUS" \
@@ -205,6 +272,7 @@ CURRENT_STATE_DESCRIPTION_ENV="$CURRENT_STATE_DESCRIPTION" \
 CURRENT_STATE_BLOCKED_ENV="$CURRENT_STATE_BLOCKED" \
 LAST_SYNCED_ENV="$LAST_SYNCED" \
 OPEN_EPISODE_ENV="$OPEN_EPISODE" CLOSE_EPISODE_ENV="$CLOSE_EPISODE" OUTCOME_ENV="$OUTCOME" \
+PARENT_ID_ENV="$PARENT" PROMOTE_ENV="$PROMOTE" \
 python3 "$SCRIPT_DIR/lib/define_work_item.py" || die "failed to define item $ITEM_ID"
 
 err ">> wrote $ITEM_FILE"

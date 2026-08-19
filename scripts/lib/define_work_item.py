@@ -24,12 +24,20 @@ to be shell-quoted, mirroring scripts/lib/upsert_wip.py's convention:
 `PRIORITY_ENV`, `SCOPE_ENV`, `TICKET_ENV`, `TASK_TYPE_ENV`, `NOW_ENV`,
 `RECORD_EVENT_ENV`, `EVENT_BY_ENV`, `CURRENT_STATE_DESCRIPTION_ENV`,
 `CURRENT_STATE_BLOCKED_ENV`, `LAST_SYNCED_ENV`, `OPEN_EPISODE_ENV`,
-`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`.
+`CLOSE_EPISODE_ENV`, `OUTCOME_ENV`, `PARENT_ID_ENV`, `PROMOTE_ENV`.
 
 The decision-making logic lives in :func:`define_item` (pure — takes dicts,
 returns dicts) so it can be unit-tested without touching the filesystem;
 only :func:`main` does I/O. Locking is the caller's (the shell wrapper's)
 responsibility — this module assumes it already holds the item's lock.
+
+ADH-012's one exception to "only main does I/O": :func:`validate_parent_link`
+reads other items' files to check the one-level-deep hierarchy invariant,
+which a pure function fundamentally can't do. The caller (the `.sh`
+wrapper) must hold the shared `work/items/.parent-link.lock/` for the
+whole validate-then-write sequence — see SPEC.md §4 for why an unguarded
+read here is unsafe in a way ordinary advisory pre-checks in this codebase
+are not.
 """
 import json
 import os
@@ -121,11 +129,85 @@ def _ensure_episode_1(item, now):
     }]
 
 
+def validate_parent_link(items_dir, item_id, parent_id):
+    """Raise ``ValueError`` with a precise, user-facing reason if linking
+    ``item_id`` under ``parent_id`` would violate the one-level-deep
+    hierarchy invariant (ADH-012 SPEC.md §2/§4); return ``None`` if the
+    link is valid.
+
+    The caller MUST hold the shared ``work/items/.parent-link.lock/`` for
+    the whole validate-then-write sequence this feeds into — this function
+    reads ``items_dir`` unguarded, and an unlocked caller reintroduces the
+    exact multi-level-chain race the lock exists to close (see SPEC.md §4).
+    """
+    if parent_id == item_id:
+        raise ValueError(f"an item cannot be its own parent: {item_id!r}")
+
+    parent_item = _load_or_raise_precise(items_dir, parent_id)
+    if parent_item is None:
+        raise ValueError(
+            f"no such item: {parent_id!r} — cannot link {item_id!r} to a nonexistent parent")
+    if parent_item.get("parent_id"):
+        raise ValueError(
+            f"{parent_id!r} already has a parent ({parent_item['parent_id']!r}) — "
+            "this system supports exactly one level of nesting, so it can't also become one")
+
+    if os.path.isdir(items_dir):
+        # Lock directories (work/items/.parent-link.lock/, <id>.json.lock/)
+        # never match `.endswith(".json")` -- excluded by the naming
+        # scheme, not a separate guard; noted here so a future rename of
+        # either doesn't silently reintroduce a false "item" read.
+        for fname in sorted(os.listdir(items_dir)):
+            if not fname.endswith(".json"):
+                continue
+            other_id = fname[:-len(".json")]
+            if other_id in (item_id, parent_id):
+                continue
+            other = _load_or_raise_precise(items_dir, other_id)
+            if other and other.get("parent_id") == item_id:
+                raise ValueError(
+                    f"{item_id!r} already has sub-items of its own (e.g. {other_id!r}) — "
+                    "can't also become a sub-item; this system supports exactly one level of nesting")
+
+    return None
+
+
+def _load_or_raise_precise(items_dir, item_id):
+    """Like :func:`_load`, but a corrupt file gets a precise, actionable
+    reason naming exactly which file is bad, instead of a raw
+    ``JSONDecodeError`` traceback — validate_parent_link's directory scan
+    can hit ANY sibling item's file, not just the one the caller named, so
+    a generic parse error is not the "precise reason" this function's
+    callers promise. Still fails loud (per this repo's doctrine), not a
+    silent skip — a corrupt item file is real data damage worth surfacing,
+    not something to paper over."""
+    path = os.path.join(items_dir, f"{item_id}.json")
+    try:
+        return _load(path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"cannot validate the parent link: {path!r} is not valid JSON ({exc}) "
+            "— fix or remove it before linking items") from exc
+
+
+def validate_promote(items_dir, item_id):
+    """Raise ``ValueError`` if ``item_id`` has no ``parent_id`` to clear —
+    ``--promote`` refuses rather than silently no-opping, since a
+    zero-effect promote is the likely signature of promoting the wrong id
+    (ADH-012 SPEC.md §3). Return ``None`` if the item genuinely has a
+    parent to clear."""
+    item = _load(os.path.join(items_dir, f"{item_id}.json"))
+    if item is None or not item.get("parent_id"):
+        raise ValueError(f"{item_id!r} has no parent_id to clear — nothing to promote")
+    return None
+
+
 def define_item(existing, *, item_id, title=None, description=None, status=None,
                  priority=None, scope=None, ticket=None, task_type=None, now=None,
                  record_event=None, event_by="define-work-item.sh",
                  current_state_description=None, current_state_blocked=False,
-                 last_synced=None, open_episode=None, close_episode=None):
+                 last_synced=None, open_episode=None, close_episode=None,
+                 parent_id=None, promote=False):
     """Return the shaped item dict for ``item_id``, merged onto ``existing``
     (``None`` for a brand new item). Pure — no I/O.
 
@@ -155,6 +237,17 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
     episode is still open; closing an outcome-less call; closing a session
     id with no matching entry). See SPEC.md sec.2/3 for the full design,
     including the lazy structurally-empty-sessions backfill.
+
+    ``parent_id``/``promote`` (ADH-012): plain reshape-tier fields, not the
+    session-lifecycle opt-in kind — ``parent_id`` sets the field, ``promote``
+    clears it (removes the key entirely). Raises ``ValueError`` if both are
+    passed together. This function does NOT validate a parent link (no
+    self-parent / no two-level-chain / not-already-a-parent checks) — that
+    requires reading OTHER items' files, which a pure function can't do; see
+    :func:`validate_parent_link`, called by the caller before this function
+    is ever invoked. The check here is deliberately duplicated (not
+    redundant) because this function is also exercised directly by its own
+    test suite, not only through the wrapper that runs the real validation.
     """
     is_new = existing is None
     item = dict(existing) if existing else {}
@@ -275,6 +368,13 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
         })
         item["history"] = history
 
+    if parent_id and promote:
+        raise ValueError("parent_id and promote are mutually exclusive")
+    if parent_id:
+        item["parent_id"] = parent_id
+    elif promote:
+        item.pop("parent_id", None)
+
     return item
 
 
@@ -312,6 +412,8 @@ def main():
                 (os.environ.get("CLOSE_EPISODE_ENV"), os.environ.get("OUTCOME_ENV", ""))
                 if os.environ.get("CLOSE_EPISODE_ENV") else None
             ),
+            parent_id=os.environ.get("PARENT_ID_ENV") or None,
+            promote=os.environ.get("PROMOTE_ENV", "") == "1",
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)

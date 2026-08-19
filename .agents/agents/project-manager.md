@@ -166,7 +166,23 @@ Common flows:
   there's a real reason not to start a session yet, via
   `scripts/define-work-item.sh <id> --status "in progress"
   --work-sessions-repo <path>`, and (with approval) transition the Jira
-  ticket.
+  ticket. **Not the same thing as the `--promote` flag below** — this
+  section is a `status` flip; `--promote` clears a `parent_id` link and
+  has nothing to do with status.
+- **Work Item hierarchy (ADH-012)**: an item can be linked as another's
+  sub-item — epic-like grouping, exactly one level deep (a sub-item can't
+  itself have sub-items, and a parent can't itself be a sub-item). Link at
+  creation or reshape time via `scripts/define-work-item.sh <id> --parent
+  <parent-id> --work-sessions-repo <path>` (validated: refuses a
+  self-parent, a nonexistent target, or anything that would create a
+  second level). De-aggregate a sub-item that's grown too large back to
+  independent via `scripts/define-work-item.sh <id> --promote
+  --work-sessions-repo <path>` — its own `history` stays intact, only the
+  `parent_id` link is removed. `#groom-item`/`#review-backlog`/
+  `#plan-cycle` all show the resulting parent/children roll-up as a
+  read-only computed display; nothing aggregates a parent's `status`/
+  `roadmap` from its children automatically — a human decides what those
+  mean for the parent.
 
 ## How to respond
 

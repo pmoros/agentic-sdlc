@@ -52,6 +52,11 @@ Evaluate against the heuristics (state the thresholds you used):
   `#triage-inbox`).
 - **Priority/scope sanity** — any `L`/`XL` items that should be broken down;
   any high-priority items still stuck in `grooming`.
+- **Hierarchy roll-up (ADH-012)** — from the same per-item reads Step 3
+  already does (`parent_id` lives on the child only — no extra pass): for
+  every item in this scan that's a parent, note its done/total count (e.g.
+  "3/5 sub-items done"); for every child, note its parent. Read-only,
+  informational — never written back to `WORK_STATE.md`'s source items.
 
 ## Step 4 — Regenerate WORK_STATE.md
 
