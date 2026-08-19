@@ -47,7 +47,10 @@ Evaluate against the heuristics (state the thresholds you used):
 - **Roadmap gaps** — from each item's own `work/items/<id>.json` (not
   `backlog.json`, which has no `roadmap` field): items whose `roadmap` is
   empty or whose `target_date` is `TBD` (no dated commitment) or already in
-  the past (overdue).
+  the past (overdue), or whose most recent `roadmap` entry has no `owner`
+  set (ADH-014 — `#define-work-item --roadmap-step` requires an owner going
+  forward, but older entries predating that requirement may still lack
+  one; flag them the same way as a `TBD` date).
 - **Unshaped load** — count of untriaged `INBOX.md` lines (pending
   `#triage-inbox`).
 - **Priority/scope sanity** — any `L`/`XL` items that should be broken down;
