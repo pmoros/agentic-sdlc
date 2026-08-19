@@ -308,9 +308,9 @@ acquire_lock "$LOCK_DIR" "item"
 # holds $LOCK_DIR, no concurrent writer can be mid-write on this same
 # item, so a read taken now is authoritative, not stale.
 if [[ "$STATUS" == "done" && -z "$CLOSE_EPISODE" && -f "$ITEM_FILE" ]]; then
-  python3 -c "
-import json, sys
-with open('$ITEM_FILE') as fh:
+  ITEM_FILE_ENV="$ITEM_FILE" python3 -c "
+import json, os, sys
+with open(os.environ['ITEM_FILE_ENV']) as fh:
     item = json.load(fh)
 sessions = item.get('sessions') or []
 if sessions and sessions[-1].get('closed') is None:

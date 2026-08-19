@@ -349,6 +349,11 @@ class DefineWorkItem(TempRepoCase):
         r = self.define("ADH-20", ["--roadmap-target-date", "2026-09-01"])
         self.assertNotEqual(r.returncode, 0)
 
+    def test_roadmap_type_without_step_refused(self):
+        self.define("ADH-20", ["--description", "d"])
+        r = self.define("ADH-20", ["--roadmap-type", "milestone"])
+        self.assertNotEqual(r.returncode, 0)
+
     def test_roadmap_step_combines_with_parent(self):
         self.define("ADH-20", ["--description", "epic"])
         r = self.define("ADH-21", [
@@ -359,6 +364,19 @@ class DefineWorkItem(TempRepoCase):
         item = self.read_item("ADH-21")
         self.assertEqual(item["parent_id"], "ADH-20")
         self.assertEqual(item["roadmap"][0]["step"], "First step")
+
+    def test_roadmap_step_combines_with_open_episode(self):
+        self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "stopped"])
+        r = self.define("ADH-20", [
+            "--open-episode", "ADH-20--e2",
+            "--roadmap-step", "Next step", "--roadmap-owner", "pmoros",
+        ])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-20")
+        self.assertEqual(item["sessions"][-1]["episode_id"], "ADH-20--e2")
+        self.assertIsNone(item["sessions"][-1]["closed"])
+        self.assertEqual(item["roadmap"][0]["step"], "Next step")
 
     # --- ADH-014: Tier 1 -- --status done vs. an open episode ----------
 
@@ -394,7 +412,15 @@ class DefineWorkItem(TempRepoCase):
         # SAME item -- `--status done` (no --close-episode) and
         # `--open-episode` -- must never together produce status: done
         # with an open sessions[] entry, whichever wins the item's lock.
+        #
+        # Gate B: a brand-new item's synthesized episode 1 is always open
+        # (_ensure_episode_1 derives `closed` from `status`, and a fresh
+        # item defaults to "grooming", not a closed-like status) -- so
+        # --open-episode always refuses outright regardless of timing,
+        # making the race structurally unreachable. Close episode 1 first
+        # so --open-episode can actually succeed and the race is real.
         self.define("ADH-20", ["--description", "d"])
+        self.define("ADH-20", ["--close-episode", "ADH-20", "--outcome", "stopped"])
 
         procs = [
             subprocess.Popen(
