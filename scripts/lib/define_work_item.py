@@ -207,7 +207,7 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
                  record_event=None, event_by="define-work-item.sh",
                  current_state_description=None, current_state_blocked=False,
                  last_synced=None, open_episode=None, close_episode=None,
-                 parent_id=None, promote=False):
+                 parent_id=None, promote=False, roadmap_step=None):
     """Return the shaped item dict for ``item_id``, merged onto ``existing``
     (``None`` for a brand new item). Pure — no I/O.
 
@@ -248,6 +248,13 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
     is ever invoked. The check here is deliberately duplicated (not
     redundant) because this function is also exercised directly by its own
     test suite, not only through the wrapper that runs the real validation.
+
+    ``roadmap_step`` (ADH-014): the last known constructor gap — ``roadmap``
+    was never settable through this function before. Plain reshape tier,
+    append-only (same precedent as ``history``): a
+    ``{step, owner, target_date, type}`` dict, appended to ``item["roadmap"]``
+    (creating the list if absent). Raises ``ValueError`` if ``step`` or
+    ``owner`` is empty. Existing entries are never touched.
     """
     is_new = existing is None
     item = dict(existing) if existing else {}
@@ -374,6 +381,15 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
         item["parent_id"] = parent_id
     elif promote:
         item.pop("parent_id", None)
+
+    if roadmap_step is not None:
+        if not roadmap_step.get("step"):
+            raise ValueError("roadmap_step requires a non-empty 'step'")
+        if not roadmap_step.get("owner"):
+            raise ValueError("roadmap_step requires a non-empty 'owner'")
+        roadmap = list(item.get("roadmap") or [])
+        roadmap.append(dict(roadmap_step))
+        item["roadmap"] = roadmap
 
     return item
 
