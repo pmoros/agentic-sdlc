@@ -78,6 +78,24 @@ If step 2b found nothing new to link, add `Confluence: nothing new to link` to t
 
 Also update `<work-sessions-repo>/SESSIONS_STATE.md`: find the row for this session and set **Status** to `done` and **Last Change** to today.
 
+**Close the item itself** (ADH-011 — before this, nothing ever did):
+compute `<item-id>` by stripping a trailing `--eN` suffix from
+`<session-id>` if present (an episode session id, e.g. `ADH-4--e2`; absent
+for an ordinary episode-1 session, where `<item-id>` is simply
+`<session-id>` itself), then:
+```bash
+scripts/define-work-item.sh <item-id> --close-episode <session-id> \
+  --outcome done --work-sessions-repo <work-sessions-repo>
+```
+This finds (or, for a never-reopened item, lazily backfills — see
+`scripts/lib/define_work_item.py`'s `_ensure_episode_1`) the matching
+`sessions[]` entry, records its close, and — because the outcome is
+`done` — sets the item's own top-level `status` to `done`, which is what
+finally lets `regenerate-views.sh` move it into `archive.json`.
+`#pause_work_session`/`#stop_work_session` are **not** changed by this —
+they intentionally leave the item `in progress`/`on hold`; only a genuine
+close reaches `done`.
+
 All file writes are autonomous.
 
 ### 4b. Assemble and approve the batched close-checkpoint
@@ -89,11 +107,15 @@ time this session closes.
 
 Load `.agents/rules/atlassian.instructions.md` before this step.
 
-1. **Determine the item and watermark.** Read
-   `<work-sessions-repo>/work/items/<session-id>.json` (the canonical
-   item). Note its `last_synced` field, if any — everything in `history`
-   with a `timestamp` after that watermark (or the whole `history`, if
-   there's no watermark yet) is "since last sync."
+1. **Determine the item and watermark.** Compute `<item-id>` the same way
+   step 4 does (strip a trailing `--eN` suffix from `<session-id>` if
+   present), then read `<work-sessions-repo>/work/items/<item-id>.json`
+   (the canonical item — for an episode ≥2, `work/items/<session-id>.json`
+   with the `--eN` suffix can never exist; the item is always filed under
+   its own id, never a per-episode one). Note its `last_synced` field, if
+   any — everything in `history` with a `timestamp` after that watermark
+   (or the whole `history`, if there's no watermark yet) is "since last
+   sync."
 
 2. **Plan the Jira transition(s)**, only if the item has a
    `tickets.main-bug-tracking` entry (a bare key like `IO-101` or a full
@@ -166,9 +188,12 @@ Load `.agents/rules/atlassian.instructions.md` before this step.
    - Surface any failure immediately; do not silently continue past one.
 
 7. **Record the watermark** — after every response in the batch succeeds
-   (or immediately, if the batch was "nothing to document"):
+   (or immediately, if the batch was "nothing to document"), against
+   `<item-id>` (step 1's stripped id, not the literal `<session-id>` — same
+   reasoning: the watermark lives on the item, not on a per-episode file
+   that may not exist):
    ```bash
-   scripts/define-work-item.sh <session-id> --last-synced <ISO 8601 now> \
+   scripts/define-work-item.sh <item-id> --last-synced <ISO 8601 now> \
      --work-sessions-repo <work-sessions-repo>
    ```
    On "no," do **not** advance the watermark — the same delta must
