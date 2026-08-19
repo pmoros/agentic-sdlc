@@ -390,6 +390,8 @@ def main():
                 (os.environ.get("CLOSE_EPISODE_ENV"), os.environ.get("OUTCOME_ENV", ""))
                 if os.environ.get("CLOSE_EPISODE_ENV") else None
             ),
+            parent_id=os.environ.get("PARENT_ID_ENV") or None,
+            promote=os.environ.get("PROMOTE_ENV", "") == "1",
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)

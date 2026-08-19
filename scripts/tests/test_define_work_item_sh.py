@@ -95,6 +95,103 @@ class DefineWorkItem(TempRepoCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.read_item("ADH-9")["last_synced"], "2026-08-19T00:00:00Z")
 
+    def test_parent_flag_links_item_to_an_existing_top_level_item(self):
+        self.define("ADH-20", ["--description", "epic"])
+        r = self.define("ADH-21", ["--description", "sub-item", "--parent", "ADH-20"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-21")["parent_id"], "ADH-20")
+        self.assertNotIn("parent_id", self.read_item("ADH-20"))
+
+    def test_parent_flag_refuses_self_parent_and_writes_no_file(self):
+        r = self.define("ADH-20", ["--description", "d", "--parent", "ADH-20"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-20.json")))
+
+    def test_parent_flag_refuses_nonexistent_target(self):
+        r = self.define("ADH-21", ["--description", "d", "--parent", "ADH-999-nope"])
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-21.json")))
+
+    def test_parent_flag_refuses_a_two_level_chain(self):
+        self.define("ADH-20", ["--description", "epic"])
+        self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20"])
+        r = self.define("ADH-22", ["--description", "grandchild", "--parent", "ADH-21"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_promote_flag_clears_parent_and_preserves_history(self):
+        self.define("ADH-20", ["--description", "epic"])
+        self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20",
+                                "--record-event", "linked", "--by", "test"])
+        r = self.define("ADH-21", ["--promote"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-21")
+        self.assertNotIn("parent_id", item)
+        self.assertTrue(any(h["action"] == "linked" for h in item["history"]))
+
+    def test_promote_flag_refuses_when_item_has_no_parent(self):
+        self.define("ADH-21", ["--description", "d"])
+        r = self.define("ADH-21", ["--promote"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_parent_and_promote_together_rejected(self):
+        r = self.define("ADH-21", ["--description", "d", "--parent", "ADH-20", "--promote"])
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_parent_link_releases_the_shared_lock_after_success(self):
+        self.define("ADH-20", ["--description", "epic"])
+        self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20"])
+        self.assertFalse(os.path.isdir(os.path.join(self.items_dir, ".parent-link.lock")))
+
+    def test_concurrent_parent_links_on_different_items_never_produce_a_multi_level_chain(self):
+        # The exact race Gate A round 1 traced by hand: item P is
+        # top-level, X and Y are top-level. Launched concurrently:
+        #   call 1: X --parent P
+        #   call 2: Y --parent X
+        # An unguarded validation read lets both pass (neither's write has
+        # landed yet), producing a live P -> X -> Y chain. The shared
+        # work/items/.parent-link.lock/ must serialize these so exactly
+        # one succeeds and the other is refused, whichever order wins.
+        self.define("ADH-P", ["--description", "top"])
+        self.define("ADH-X", ["--description", "middle"])
+        self.define("ADH-Y", ["--description", "leaf"])
+
+        procs = [
+            subprocess.Popen(
+                [SCRIPT, "ADH-X", "--work-sessions-repo", self.ws, "--parent", "ADH-P"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ),
+            subprocess.Popen(
+                [SCRIPT, "ADH-Y", "--work-sessions-repo", self.ws, "--parent", "ADH-X"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ),
+        ]
+        results = [p.communicate(timeout=15) for p in procs]
+        returncodes = [p.returncode for p in procs]
+
+        # Exactly one of the two links must have gone through -- whichever
+        # order the shared lock serialized them in, the other must have
+        # been refused by validate_parent_link once it saw the first
+        # write's result.
+        self.assertEqual(
+            sorted(returncodes), [0, 1],
+            f"expected exactly one success and one refusal, got {returncodes}: {results}")
+
+        # No matter which one won, the final state must be at most one
+        # level deep -- never a live 3-level chain.
+        x_parent = self.read_item("ADH-X").get("parent_id")
+        y_parent = self.read_item("ADH-Y").get("parent_id")
+        self.assertFalse(
+            x_parent == "ADH-P" and y_parent == "ADH-X",
+            "a live P -> X -> Y chain formed -- the race was not actually closed")
+
+    def test_reparenting_to_a_different_parent_is_allowed(self):
+        self.define("ADH-20", ["--description", "epic1"])
+        self.define("ADH-30", ["--description", "epic2"])
+        self.define("ADH-21", ["--description", "sub", "--parent", "ADH-20"])
+        r = self.define("ADH-21", ["--parent", "ADH-30"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-21")["parent_id"], "ADH-30")
+
     def test_open_episode_flag_appends_a_new_episode(self):
         self.define("ADH-4", ["--description", "d", "--status", "done"])
         r = self.define("ADH-4", ["--open-episode", "ADH-4--e2"])
