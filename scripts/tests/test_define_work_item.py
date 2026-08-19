@@ -195,6 +195,43 @@ class LifecycleEventOptIn(unittest.TestCase):
         self.assertEqual(actions, ["item defined", "session started"])
 
 
+class LastSyncedWatermark(unittest.TestCase):
+    """ADH-008 Phase 8: end_work_session's batched close-checkpoint records
+    a `last_synced` watermark on the item after a successful external-write
+    batch, through this same locked write path — same opt-in pattern as
+    record_event, since it's a lifecycle-event field, not a shapeable one."""
+
+    def test_last_synced_sets_the_field(self):
+        item = D.define_item(
+            {"id": "PROJ-1", "title": "t", "status": "in progress",
+             "current_state": {"description": "d", "is_blocked": False},
+             "history": [], "sessions": []},
+            item_id="PROJ-1", last_synced="2026-08-19T00:00:00Z", now=NOW)
+        self.assertEqual(item["last_synced"], "2026-08-19T00:00:00Z")
+
+    def test_no_last_synced_leaves_field_absent_on_fresh_item(self):
+        item = D.define_item(None, item_id="ADH-9", description="d", now=NOW)
+        self.assertNotIn("last_synced", item)
+
+    def test_no_last_synced_leaves_existing_value_untouched_on_reshape(self):
+        item = D.define_item(
+            {"id": "PROJ-1", "title": "t", "status": "in progress",
+             "current_state": {"description": "d", "is_blocked": False},
+             "history": [], "sessions": [], "last_synced": "2026-08-01T00:00:00Z"},
+            item_id="PROJ-1", priority="Major", now=NOW)
+        self.assertEqual(item["last_synced"], "2026-08-01T00:00:00Z")
+
+    def test_last_synced_combines_with_record_event(self):
+        item = D.define_item(
+            {"id": "PROJ-1", "title": "t", "status": "in progress",
+             "current_state": {"description": "d", "is_blocked": False},
+             "history": [], "sessions": []},
+            item_id="PROJ-1", record_event="session ended", event_by="end_work_session",
+            last_synced="2026-08-19T00:00:00Z", now=NOW)
+        self.assertEqual(item["last_synced"], "2026-08-19T00:00:00Z")
+        self.assertEqual(item["history"][-1]["action"], "session ended")
+
+
 class LegacyItemsWithoutSessionsField(unittest.TestCase):
     """Real existing items (pre-migration shape) have no `sessions` key."""
 

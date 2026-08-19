@@ -89,6 +89,12 @@ class DefineWorkItem(TempRepoCase):
         item = self.read_item("ADH-9")
         self.assertEqual(item["current_state"], {"description": "waiting on review", "is_blocked": True})
 
+    def test_last_synced_flag_sets_the_watermark(self):
+        self.define("ADH-9", ["--description", "d"])
+        r = self.define("ADH-9", ["--last-synced", "2026-08-19T00:00:00Z"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read_item("ADH-9")["last_synced"], "2026-08-19T00:00:00Z")
+
     def test_releases_lock_after_success(self):
         self.define("ADH-9", ["--description", "d"])
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-9.json.lock")))

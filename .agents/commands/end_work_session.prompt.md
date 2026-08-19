@@ -78,6 +78,69 @@ Also update `<work-sessions-repo>/SESSIONS_STATE.md`: find the row for this sess
 
 All file writes are autonomous.
 
+### 4b. Assemble and approve the batched close-checkpoint
+
+Everything external is assembled **first** and approved **once** — never
+write to Jira/Confluence piecemeal (ADH-008 Phase 8; see `SPEC.md` §9). A
+declined batch changes nothing locally; the same delta re-proposes next
+time this session closes.
+
+Load `.agents/rules/atlassian.instructions.md` before this step.
+
+1. **Determine the item and watermark.** Read
+   `<work-sessions-repo>/work/items/<session-id>.json` (the canonical
+   item). Note its `last_synced` field, if any — everything in `history`
+   with a `timestamp` after that watermark (or the whole `history`, if
+   there's no watermark yet) is "since last sync."
+
+2. **Propose the Jira transition**, only if the item has a
+   `tickets.main-bug-tracking` entry (a bare key like `IO-101` or a full
+   `/browse/IO-101` URL — extract the key either way):
+   - Call the get-transitions tool for the current issue — **never assume**
+     the current state (existing pre-flight rule above). Some workflows
+     have no direct in-progress-to-done transition and need a *chain* of
+     transitions — list what's available and ask the user which applies
+     rather than guessing a name.
+   - Draft **one** consolidated comment summarizing what happened since the
+     watermark (question 1's summary + notable `history` entries) — not a
+     transition-by-transition dump.
+
+3. **Propose Confluence updates.** For each row in `CONTEXT.md`'s
+   `## Related Wiki` table (added by `start-work-session`, re-checked in
+   step 2b), draft a **footer comment** — not a page edit; this command
+   doesn't have enough context to safely rewrite page content — noting the
+   session's outcome and linking back to the ticket/PR. Nothing to propose
+   if the table is empty or absent.
+
+4. **"Also touches" items.** No mechanism currently tracks which other
+   items a session's work also affects (see
+   `docs/gap-analysis-target-architecture.md`) — this is a deliberate no-op
+   until one exists. Do not invent one ad hoc.
+
+5. **Show the full batch** — every proposed Jira transition/comment and
+   every proposed Confluence footer comment, verbatim — and ask: "Apply
+   all? (yes / no / edit)". On "edit," let the user restate what should
+   change, regenerate the batch, and show it again. If there is **nothing**
+   to propose (no ticket, no Related Wiki rows, nothing since the
+   watermark), the batch must say so explicitly — **"Nothing to
+   document — no Jira ticket, no Related Wiki pages, and no ticket-worthy
+   history since the last sync."** Never silently skip this step.
+
+6. **On "yes," execute and verify each response** (per
+   `atlassian.instructions.md`'s "never assume success" rule) — the ticket
+   transition, then the comment, then each Confluence footer comment in
+   turn. Surface any failure immediately; do not silently continue past
+   one.
+
+7. **Record the watermark** — after every response in the batch succeeds
+   (or immediately, if the batch was "nothing to document"):
+   ```bash
+   scripts/define-work-item.sh <session-id> --last-synced <ISO 8601 now> \
+     --work-sessions-repo <work-sessions-repo>
+   ```
+   On "no," do **not** advance the watermark — the same delta must
+   re-propose next close.
+
 ### 5. Remove all worktrees
 
 For each target-repo worktree from step 3, show the following and **wait for explicit approval before running**:
@@ -105,6 +168,7 @@ scripts/session-tmux.sh kill <session-id>
 
 Tell the user:
 - Session folder stays at `<work-sessions-repo>/sessions/<session-id>/` (it's committed to the work-sessions repo, nothing to archive or delete — the whole point of that repo is that it survives)
+- The close-checkpoint outcome from step 4b — what was applied (Jira transition, comments, Confluence footer comments), or that there was nothing to document
 - Worktrees removed (list each); branches retained in their source repos
 - VS Code workspace updated; tmux session `cw-<session-id>` killed
 - Follow-up tasks noted (list them)

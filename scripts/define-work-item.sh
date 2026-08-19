@@ -56,6 +56,11 @@
 #                                 via --blocked). Same opt-in as --record-event.
 #   --blocked                     Sets current_state.is_blocked true. Only
 #                                 meaningful with --current-state.
+#   --last-synced <ISO8601>       Explicit opt-in: set the `last_synced`
+#                                 watermark. #end_work_session's batched
+#                                 close-checkpoint records this after a
+#                                 successful external-write batch. Never
+#                                 reset by an unrelated reshape.
 #   --work-sessions-repo <path>   Default: sibling ../work-sessions of this
 #                                 repo.
 #   -h, --help                    Show this help.
@@ -94,6 +99,7 @@ RECORD_EVENT=""
 EVENT_BY=""
 CURRENT_STATE_DESCRIPTION=""
 CURRENT_STATE_BLOCKED=0
+LAST_SYNCED=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -109,6 +115,7 @@ while [[ $# -gt 0 ]]; do
     --by)                     needval "$@"; EVENT_BY="$2"; shift 2 ;;
     --current-state)          needval "$@"; CURRENT_STATE_DESCRIPTION="$2"; shift 2 ;;
     --blocked)                CURRENT_STATE_BLOCKED=1; shift ;;
+    --last-synced)            needval "$@"; LAST_SYNCED="$2"; shift 2 ;;
     --work-sessions-repo)     needval "$@"; WORK_SESSIONS_REPO="$2"; shift 2 ;;
     -*)                       die "unknown option: $1 (try --help)" ;;
     *)                        [[ -z "$ITEM_ID" ]] && ITEM_ID="$1" || die "unexpected arg: $1"; shift ;;
@@ -175,6 +182,7 @@ TASK_TYPE_ENV="$TASK_TYPE" NOW_ENV="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
 RECORD_EVENT_ENV="$RECORD_EVENT" EVENT_BY_ENV="$EVENT_BY" \
 CURRENT_STATE_DESCRIPTION_ENV="$CURRENT_STATE_DESCRIPTION" \
 CURRENT_STATE_BLOCKED_ENV="$CURRENT_STATE_BLOCKED" \
+LAST_SYNCED_ENV="$LAST_SYNCED" \
 python3 "$SCRIPT_DIR/lib/define_work_item.py" || die "failed to define item $ITEM_ID"
 
 err ">> wrote $ITEM_FILE"

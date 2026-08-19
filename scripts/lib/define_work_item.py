@@ -74,7 +74,8 @@ def _seed_title(description, task_type):
 def define_item(existing, *, item_id, title=None, description=None, status=None,
                  priority=None, scope=None, ticket=None, task_type=None, now=None,
                  record_event=None, event_by="define-work-item.sh",
-                 current_state_description=None, current_state_blocked=False):
+                 current_state_description=None, current_state_blocked=False,
+                 last_synced=None):
     """Return the shaped item dict for ``item_id``, merged onto ``existing``
     (``None`` for a brand new item). Pure — no I/O.
 
@@ -90,6 +91,11 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
     plain field-reshaping call can never clobber them unless it explicitly
     asks not to be. Applies regardless of ``is_new``, and regardless of
     whether other fields were also reshaped in the same call.
+
+    ``last_synced``: the batched-close-checkpoint watermark
+    (``#end_work_session.prompt.md``, ADH-008 Phase 8) — set only when
+    explicitly passed; absent/unset otherwise, and never reset by an
+    unrelated reshape.
     """
     is_new = existing is None
     item = dict(existing) if existing else {}
@@ -156,6 +162,9 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
             "is_blocked": bool(current_state_blocked),
         }
 
+    if last_synced is not None:
+        item["last_synced"] = last_synced
+
     return item
 
 
@@ -187,6 +196,7 @@ def main():
             event_by=os.environ.get("EVENT_BY_ENV") or "define-work-item.sh",
             current_state_description=os.environ.get("CURRENT_STATE_DESCRIPTION_ENV") or None,
             current_state_blocked=os.environ.get("CURRENT_STATE_BLOCKED_ENV", "") == "1",
+            last_synced=os.environ.get("LAST_SYNCED_ENV") or None,
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)
