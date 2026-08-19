@@ -163,5 +163,39 @@ class FanoutWindowRoutingTest(unittest.TestCase):
         self.assertEqual(captured["t1"], "claude-opus-5")
 
 
+class OutcomeFromResultTest(unittest.TestCase):
+    """ADH-008 finding: a real `claude -p --output-format json` result record
+    has `is_error` but no `outcome` key of its own — that vocabulary
+    ("review_ready" | "failed") is what orchestrator.join_input/join_decision
+    expect. default_launch previously returned the raw CLI record verbatim,
+    so join_input's fail-closed "missing outcome -> failed" path silently
+    swallowed every genuinely successful real-CLI run into partial_review,
+    with merge never happening. `_outcome_from_result` is the one place that
+    translation happens now — pure, so it's unit-tested without a real CLI."""
+
+    def test_is_error_false_maps_to_review_ready(self):
+        self.assertEqual(fanout_run._outcome_from_result({"is_error": False}), "review_ready")
+
+    def test_is_error_true_maps_to_failed(self):
+        self.assertEqual(fanout_run._outcome_from_result({"is_error": True}), "failed")
+
+    def test_missing_is_error_fails_closed(self):
+        self.assertEqual(fanout_run._outcome_from_result({}), "failed")
+
+    def test_is_error_none_fails_closed(self):
+        self.assertEqual(fanout_run._outcome_from_result({"is_error": None}), "failed")
+
+    def test_default_launch_sets_outcome_from_real_result_shape(self):
+        # the exact shape `claude -p --output-format json` actually produces
+        # (no "outcome" key) — see run-records/traces/*.result.json.
+        real_shape = {"type": "result", "subtype": "success", "is_error": False,
+                     "task_id": "t1", "result": "done", "stop_reason": "end_turn"}
+        record = dict(real_shape)
+        record.setdefault("outcome", fanout_run._outcome_from_result(record))
+        self.assertEqual(record["outcome"], "review_ready")
+        joined = __import__("orchestrator").join_input(record)
+        self.assertEqual(joined["outcome"], "review_ready")
+
+
 if __name__ == "__main__":
     unittest.main()

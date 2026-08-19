@@ -147,6 +147,19 @@ def execute_fanout(
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _outcome_from_result(record: dict) -> str:
+    """Translate a raw `claude -p --output-format json` result record into
+    the outcome vocabulary orchestrator.join_input/join_decision expect
+    ("review_ready" | "failed"). The real CLI result schema has `is_error`
+    but no `outcome` field of its own — ADH-008 found that a genuinely
+    successful real-CLI run was silently landing as `join_input`'s
+    fail-closed "missing outcome -> failed", so the fan-out never merged
+    despite every worker succeeding. Pure — no I/O — so it's unit-tested
+    without a real CLI; `default_launch` is the only caller. Fails closed:
+    only an explicit `is_error: False` counts as success."""
+    return "review_ready" if record.get("is_error") is False else "failed"
+
+
 def default_launch(spec: dict, *, base_ref: str = "main", worktrees_dir: str,
                    run_records_dir: str, lane: str = "subscription",
                    repo: str = ".", extra_env: dict | None = None) -> dict:
@@ -168,6 +181,7 @@ def default_launch(spec: dict, *, base_ref: str = "main", worktrees_dir: str,
     # newest result.json for this task
     traces = sorted(__import__("glob").glob(os.path.join(run_records_dir, "traces", f"{tid}-*.result.json")))
     record = json.load(open(traces[-1])) if traces else {"task_id": tid, "is_error": True, "outcome": None}
+    record.setdefault("outcome", _outcome_from_result(record))
     record.setdefault("branch", branch)
     record["worktree"] = wt
     return record

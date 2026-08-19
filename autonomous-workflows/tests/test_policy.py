@@ -6,7 +6,9 @@ or "gated" (route to a human via any channel). Fail-closed by default.
 
 Run: python3 autonomous-workflows/tests/test_policy.py
 """
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -62,6 +64,55 @@ class GatedTest(unittest.TestCase):
     def test_pr_and_deploy_gated(self):
         self.assertEqual(clf(kind="pr"), policy.GATED)
         self.assertEqual(clf(kind="deploy"), policy.GATED)
+
+
+class PathCanonicalizationTest(unittest.TestCase):
+    """ADH-008 Gate A finding: `_within()` used lexical normpath only, so a
+    SYMLINK inside the session root pointing outside it would read as
+    'within' by string comparison even though the real target escapes
+    (CWE-22). Needs actual files on disk — realpath only resolves symlinks
+    that exist."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="policytest-")
+        self.addCleanup(lambda: __import__("shutil").rmtree(self.tmp, ignore_errors=True))
+        self.root = os.path.join(self.tmp, "session")
+        self.outside = os.path.join(self.tmp, "outside")
+        os.makedirs(self.root)
+        os.makedirs(self.outside)
+        with open(os.path.join(self.outside, "secret.txt"), "w") as fh:
+            fh.write("secret")
+
+    def test_symlink_escaping_session_root_is_gated(self):
+        link = os.path.join(self.root, "innocuous-looking-file")
+        os.symlink(os.path.join(self.outside, "secret.txt"), link)
+        self.assertEqual(
+            policy.classify_action({"kind": "write", "path": link}, self.root),
+            policy.GATED,
+            "a symlink under the session root pointing outside it must not read as ALLOWED",
+        )
+
+    def test_real_file_within_session_root_still_allowed(self):
+        real = os.path.join(self.root, "real-file.txt")
+        with open(real, "w") as fh:
+            fh.write("x")
+        self.assertEqual(
+            policy.classify_action({"kind": "write", "path": real}, self.root),
+            policy.ALLOWED,
+        )
+
+    def test_symlinked_session_root_itself_still_resolves_correctly(self):
+        # the root itself may be reached via a symlink (e.g. a worktree path
+        # through a symlinked tmp dir on macOS) — must not itself misclassify
+        root_link = os.path.join(self.tmp, "session-link")
+        os.symlink(self.root, root_link)
+        real = os.path.join(self.root, "real-file.txt")
+        with open(real, "w") as fh:
+            fh.write("x")
+        self.assertEqual(
+            policy.classify_action({"kind": "write", "path": real}, root_link),
+            policy.ALLOWED,
+        )
 
 
 class OverrideAndFailClosedTest(unittest.TestCase):
