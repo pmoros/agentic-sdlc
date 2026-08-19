@@ -21,6 +21,26 @@ Ask the user each of the following in sequence. Do not skip.
 3. **Task review** — show the current `TASKS.md` table. For any item not `done`, ask: "Skip (out of scope) or carry over to a new session?"
 4. **Follow-up tasks** — any tasks that emerged but are out of scope for this session? (create new sessions for them later)
 
+### 2b. Confluence re-check
+
+Load `.agents/rules/atlassian.instructions.md` for the Confluence space
+table and CQL discovery guidance, and read the session's `CONTEXT.md` for
+its `## Related Wiki` table (added by the `start-work-session` skill's
+matching step). If that heading is entirely absent, this session predates
+the step — skip re-checking and note nothing here.
+
+Re-ask: "Same Confluence space(s) as at session start (list them), any
+different/additional ones, or none?" Re-run the CQL search (space(s) +
+ticket key/goal keywords, per `atlassian.instructions.md`), informed by what
+actually happened this session (skim `WORKLOG.md`/`TASKS.md`). Surface any
+new candidate pages; ask which to add. **Append** new rows to the existing
+`## Related Wiki` table — never remove or edit prior rows.
+
+If there is nothing new to link, say so explicitly in the WORKLOG entry
+(step 4) — `Confluence: nothing to document` — rather than leaving it
+unmentioned. A skipped check and a checked-and-empty result must never look
+the same in the record.
+
 ### 3. Check git state
 
 List the session's target-repo worktrees: `ls <work-sessions-repo>/sessions/<session-id>/worktrees/` excluding `agentic-sdlc`. For each, determine its branch and verify it has been pushed and a PR exists. If either is missing, display:
@@ -51,6 +71,8 @@ Append to `<work-sessions-repo>/sessions/<session-id>/WORKLOG.md`:
 ```
 
 If question 4 named follow-up tasks, note them in the same entry under a `Follow-ups:` line — they become the seed for a future `#initialize_work_session_folder.prompt.md` run, not automatic new sessions.
+
+If step 2b found nothing new to link, add `Confluence: nothing to document` to the same entry — never omit it silently.
 
 Also update `<work-sessions-repo>/SESSIONS_STATE.md`: find the row for this session and set **Status** to `done` and **Last Change** to today.
 

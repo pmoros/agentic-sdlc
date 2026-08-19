@@ -32,6 +32,7 @@ State lives in two places:
 | `CONTEXT.md` → *Current state* | One or two lines: where things stand right now + `Blocked: yes/no` | Whenever reality changes — blocked/unblocked, waiting on review, direction shifts. Keep it true *now*. |
 | `CONTEXT.md` → *Activity log* | Append-only terse timestamped actions | On every significant action (branch/worktree/PR created, decision made, blocker hit). Append via `scripts/session-log.sh`. |
 | `CONTEXT.md` → *Tickets / contacts / dates* | Live reference | When a ticket/contact/date is learned or changes. |
+| `CONTEXT.md` → *Related Wiki* | `Page \| Space \| Link` table of linked Confluence pages | Asked at session start (`start-work-session` skill) and re-checked at close (`#end_work_session`) — append-only, never remove a linked page. An empty table (header row only) means asked, nothing relevant; an absent heading means the session predates this step. |
 | `WORKLOG.md` | Append-only log of lifetime events | Session started/paused/resumed/stopped/ended, PR opened, deployment run, major decision. Append via `scripts/session-log.sh`. |
 | `PLAN.md` | Strategy: goal, approach, milestones, risks | When the goal/approach/milestones/risks change — not per small step. |
 | `SPEC.md` | Tactical design: problem, design, interfaces/contracts, out-of-scope | When the design or a contract is defined or changes. Per design-first doctrine, fill it *before* implementing. |
