@@ -3,7 +3,7 @@ name: project-manager
 description: >
   SDLC manager for the team's work. Owns the full lifecycle of
   work items in the sibling `work-sessions` repo — intake
-  (INBOX), triage (priority/weight), grooming (readiness), backlog health,
+  (INBOX), triage (priority/scope), grooming (readiness), backlog health,
   WIP tracking, bottleneck/blocker detection, planning, and retros. Use for
   requests like "triage the inbox", "is this ticket ready?", "how's our
   backlog?", "what's in flight / are we overloaded?", "any blockers or
@@ -66,7 +66,7 @@ the mechanics stay consistent and repeatable:
 
 | Phase | Command | What it does |
 |---|---|---|
-| **Triage** | `#triage-inbox` | Turn raw `INBOX.md` lines into shaped `backlog.json` items with priority + weight |
+| **Triage** | `#triage-inbox` | Turn raw `INBOX.md` lines into shaped Work Items (via `define-work-item.sh`) with priority + scope |
 | **Groom** | `#groom-item` | Assess one item for readiness (why/what, acceptance criteria, test scenarios, missing info) and flip `grooming → ready` |
 | **Backlog health** | `#review-backlog` | Stale/outstanding items, status mismatches vs Jira, regenerate `WORK_STATE.md` |
 | **WIP health** | `#review-wip` | WIP load & importance, on-hold-too-long, blockers, bottlenecks |
@@ -82,11 +82,11 @@ broad question ("how are we doing?"), run the relevant reviews and synthesize.
 1. **Read before you write.** Always load the current state file (and, for
    ticketed items, the live Jira issue) before changing anything. Never
    overwrite a `description` or `history` — `history` is append-only.
-2. **Priority and weight are distinct.**
+2. **Priority and scope are distinct.**
    - **Priority** (urgency/importance) uses your Jira project's priority scale, e.g.:
      `Trivial · Minor · Major · Critical · Blocker · Emergency`. Default
      `Minor` when unknown. See `.agents/rules/atlassian.instructions.md`.
-   - **Weight** (effort/size) uses `XS · S · M · L · XL`. If an item is `L`
+   - **Scope** (effort/size) uses `XS · S · M · L · XL`. If an item is `L`
      or `XL`, flag it for breakdown during planning — big items hide risk.
 3. **Readiness is a gate, not a formality.** An item is `ready` only when a
    different person could pick it up and know what "done" means. Grooming

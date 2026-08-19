@@ -11,8 +11,10 @@ Assess whether the backlog is on track and regenerate the derived snapshot in
 
 ## Step 1 — Load state
 
-Read `backlog.json`, `wip.json`, `scratchpad.json`, `INBOX.md`, and the current
-`WORK_STATE.md`. Compute ages against today's date (provided in context).
+Read `backlog.json`, `wip.json` (generated views over `work/items/*.json` —
+read-only; see Step 2 for how writes actually happen), `scratchpad.json`,
+`INBOX.md`, and the current `WORK_STATE.md`. Compute ages against today's date
+(provided in context).
 
 ## Step 2 — Optional Jira sync
 
@@ -20,8 +22,11 @@ Ask (or honor an explicit `--sync` argument): "Sync from Jira first?" If yes,
 load `.agents/rules/atlassian.instructions.md` for the field/status contract,
 then query `assignee = currentUser() AND resolution = Unresolved` and
 reconcile:
-- **New in Jira, not tracked** → add to `backlog.json` as `ready` (or match the
-  live Jira status), with a `history` entry noting the sync.
+- **New in Jira, not tracked** → create it via `scripts/define-work-item.sh
+  <id> --description "..." --status ready --ticket <url>
+  --record-event "Synced from Jira" --by "#review-backlog"
+  --work-sessions-repo <path>` (or match the live Jira status if not
+  actually ready). Never hand-write `backlog.json` — it's regenerated.
 - **Tracked status disagrees with Jira** → record under "Status mismatches" in
   `WORK_STATE.md`. Do **not** auto-correct — a human picks the accurate one.
 - **Done/closed in Jira but still open here** → flag for closing; don't delete
@@ -37,7 +42,7 @@ Evaluate against the heuristics (state the thresholds you used):
   `TBD` (no dated commitment) or already in the past (overdue).
 - **Unshaped load** — count of untriaged `INBOX.md` lines (pending
   `#triage-inbox`).
-- **Priority/weight sanity** — any `L`/`XL` items that should be broken down;
+- **Priority/scope sanity** — any `L`/`XL` items that should be broken down;
   any high-priority items still stuck in `grooming`.
 
 ## Step 4 — Regenerate WORK_STATE.md

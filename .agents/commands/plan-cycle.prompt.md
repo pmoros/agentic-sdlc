@@ -36,9 +36,12 @@ items, one person). Recommend a rank; let the user adjust.
 For every `L`/`XL` item selected for the cycle, propose a breakdown into
 smaller, independently-shippable pieces (each ideally `S`/`M`). Big
 undecomposed items hide risk and stall. For each new sub-item, offer to create
-a `backlog.json` entry and/or a Jira sub-task (guarded). For the Jira write,
-load `.agents/rules/atlassian.instructions.md` first — it is not auto-loaded
-and covers the Epic-link/parent quirks.
+it via `scripts/define-work-item.sh <id> --description "..." --status grooming
+--scope <XS|S|M|L|XL> [--priority ...] --work-sessions-repo <path>`
+(`backlog.json` is a generated view, never hand-written) and/or a Jira
+sub-task (guarded). For the Jira write, load
+`.agents/rules/atlassian.instructions.md` first — it is not auto-loaded and
+covers the Epic-link/parent quirks.
 
 ## Step 4 — Capacity check
 
@@ -79,9 +82,14 @@ Write `<work>/planning/<YYYY-MM-DD>-<slug>.md`:
 
 ## Step 6 — Reflect into the tracker
 
-- Set `roadmap` entries (step, owner, `target_date`, type) on the committed
-  items in `backlog.json` so `WORK_STATE.md`'s "Next actions" reflects the plan.
-- Append a `history` note to items whose priority/breakdown changed.
+- `roadmap` (step, owner, `target_date`, type) has no `define-work-item.sh`
+  flag yet — the constructor doesn't support it as of ADH-008. Note the
+  planned roadmap in this cycle's plan doc for now; flag extending the
+  constructor as a follow-up rather than hand-editing `work/items/<id>.json`.
+- For any item whose priority/scope changed, update it via
+  `scripts/define-work-item.sh <id> [--priority ...] [--scope ...]
+  --record-event "Re-prioritized at planning" --by "#plan-cycle"
+  --work-sessions-repo <path>`.
 - Re-run `#review-backlog` to regenerate `WORK_STATE.md` counts.
 
 Confirm the plan path and give a one-paragraph summary: cycle goals, top

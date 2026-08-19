@@ -77,8 +77,9 @@ Write `<work>/retros/<YYYY-MM-DD>-<slug>.md` using this template:
 ## Step 5 — Close the loop into the backlog
 
 For each action item, offer to create a tracking entry so it isn't lost:
-- Add it to `<work>/work/backlog.json` (status `grooming`, an `ADH-NNN` ID or a
-  real ticket), or
+- Create it via `scripts/define-work-item.sh <ADH-NNN-or-ticket-id>
+  --description "..." --status grooming --work-sessions-repo <path>`
+  (`backlog.json` is a generated view, never hand-written), or
 - Create a Jira ticket (guarded write — needs approval).
 
 Confirm the retro path and list the action items with their tracking IDs. Note

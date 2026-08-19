@@ -1,6 +1,6 @@
 ---
 agent: agent
-description: Triage raw INBOX.md captures into shaped backlog.json items — assign priority, weight, and a first readiness read. Part of the project-manager SDLC flow.
+description: Triage raw INBOX.md captures into shaped Work Items via define-work-item.sh — assign priority, scope, and a first readiness read. Part of the project-manager SDLC flow.
 ---
 
 # Triage Inbox
@@ -88,7 +88,7 @@ Use the Jira scale: `Trivial · Minor · Major · Critical · Blocker · Emergen
 
 ## Step 5 — Offer next steps
 
-Show a short table of what you triaged (ID · title · priority · weight ·
+Show a short table of what you triaged (ID · title · priority · scope ·
 status). Then:
 - Note how many landed in `grooming` and need `#groom-item` before they're
   actionable.

@@ -51,8 +51,10 @@ known. This is the question the user most wants answered — don't hedge.
 ## Step 5 — Update derived state
 
 Refresh the **Blocked items** and **Stale items** sections of `WORK_STATE.md`
-from this pass (keep `current_state.is_blocked` in each item in sync with
-reality — update it if a blocker cleared or appeared, with a `history` entry).
+from this pass. If a blocker cleared or a new one appeared for an item, update
+it via `scripts/define-work-item.sh <id> --current-state "<refreshed status>"
+[--blocked] --record-event "<what changed>" --by "#review-wip"
+--work-sessions-repo <path>` — never hand-edit `work/items/<id>.json`.
 
 ## Step 6 — Readout
 

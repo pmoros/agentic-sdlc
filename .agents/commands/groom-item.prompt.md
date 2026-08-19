@@ -12,12 +12,14 @@ and know exactly what "done" means. `<work>` is the sibling
 ## Step 1 — Identify the item
 
 Take the item ID from the invocation (e.g. `groom-item PROJ-6885`). If none was
-given, read `<work>/work/backlog.json`, list all items with status `grooming`,
-and ask which to groom (or offer to groom the highest-priority one).
+given, read `<work>/work/backlog.json` (a generated view, read-only — see Step
+4 for how writes actually happen), list all items with status `grooming`, and
+ask which to groom (or offer to groom the highest-priority one).
 
 ## Step 2 — Load context
 
-- Read the item from `backlog.json` (or `wip.json`/`scratchpad.json`).
+- Read the item from `<work>/work/items/<id>.json` (the source of truth;
+  `backlog.json`/`wip.json` are read-only generated views).
 - If it has a Jira/GitHub ticket, read the live issue (reads need no approval)
   for the authoritative description, acceptance criteria, and comments. Follow
   `.agents/rules/atlassian.instructions.md` for Jira reads.
@@ -46,7 +48,7 @@ cite the evidence:
    design decision.
 6. **Dependencies & blockers** — does it depend on other items or teams? Is it
    actually blocked right now?
-7. **Size sanity** — is the `weight` still right? If `L`/`XL`, recommend
+7. **Size sanity** — is the `scope` still right? If `L`/`XL`, recommend
    breaking it into smaller items at planning.
 
 ## Step 4 — Verdict
@@ -54,14 +56,27 @@ cite the evidence:
 Produce one of:
 
 - **READY** — all of why/what/AC/test-scenarios are clear and no blocking gaps.
-  Update the item: `status: "ready"`, refresh `current_state.description`,
-  append a `history` entry ("Groomed to ready", ISO timestamp, `by`). If the
-  weight or priority changed, update them too.
-- **NOT READY** — keep `status: "grooming"` and produce a precise, actionable
-  gap list ("Needs: explicit AC; owner for the FSx credentials; confirmation
-  of target region"). Append a `history` entry recording the grooming pass and
-  what's outstanding. Where the fix is a question for a specific person/team,
-  say who to ask.
+  Update the item through the canonical constructor — never hand-edit
+  `work/items/<id>.json` or `backlog.json` (the latter would be silently
+  overwritten by the next regeneration anyway):
+  ```bash
+  scripts/define-work-item.sh <id> --status ready [--scope <XS|S|M|L|XL>] \
+    [--priority <priority>] --current-state "<refreshed one-line status>" \
+    --record-event "Groomed to ready" --by "#groom-item" \
+    --work-sessions-repo <work-sessions-repo>
+  ```
+  Only pass `--scope`/`--priority` if grooming actually changed them.
+- **NOT READY** — keep `status: "grooming"` (omit `--status`, or pass it
+  explicitly) and produce a precise, actionable gap list ("Needs: explicit
+  AC; owner for the FSx credentials; confirmation of target region"). Record
+  the pass the same way:
+  ```bash
+  scripts/define-work-item.sh <id> \
+    --current-state "<one-line summary of what's outstanding>" \
+    --record-event "Grooming pass — not ready: <short gap summary>" \
+    --by "#groom-item" --work-sessions-repo <work-sessions-repo>
+  ```
+  Where the fix is a question for a specific person/team, say who to ask.
 
 Never invent acceptance criteria to force a `ready` — surface the gap instead.
 
