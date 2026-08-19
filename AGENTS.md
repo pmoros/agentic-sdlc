@@ -7,6 +7,11 @@ active/paused/done sessions, plans, decisions, worktrees) lives in the
 sibling `work-sessions` repo, which commits everything so it survives across
 machines and time.
 
+New to this toolbox, or want the full model in one place? Read
+[`docs/architecture.md`](docs/architecture.md) (control vs. execution
+plane, the rollup chain, episode identity, Work Item hierarchy) and
+[`docs/cheatsheet.md`](docs/cheatsheet.md) (every command and script flag).
+
 ---
 
 ## Integration Schemas
