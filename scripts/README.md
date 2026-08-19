@@ -9,6 +9,8 @@ agent each time.
 | `create-worktree.sh` | Create/refresh/promote a git worktree of any repo under `repos/` (read-only-source policy, CoW node_modules) | `#create_work_tree`, `init-session.sh` |
 | `init-session.sh` | Scaffold a session folder in `work-sessions`, register it in `SESSIONS_STATE.md` **and the portfolio `work/wip.json` tracker** (via `lib/upsert_wip.py`), create the agentic-sdlc tools worktree, wire up tmux | `#initialize_work_session_folder` |
 | `lib/upsert_wip.py` | Pure wip-upsert logic — idempotently register a session id as an `in progress` item in `work/wip.json`, moving it from `work/backlog.json` if groomed there (per `work/template.json` shape) | `init-session.sh` |
+| `define-work-item.sh` | The canonical Work Item constructor — creates/reshapes `work/items/<id>.json` (one file per item, per-item `mkdir`-lock with PID-liveness stale-break) via `lib/define_work_item.py` | `#triage-inbox`, `#groom-item`, `init-session.sh` upsert path (ADH-008 item/episode split, in progress) |
+| `lib/define_work_item.py` | Pure item-shaping logic — the single writing mechanism for a Work Item's fields; only explicitly-passed fields change, `sessions[]`/`history`/`current_state` are preserved on reshape | `define-work-item.sh` |
 | `session-tmux.sh` | Guarded tmux lifecycle helper (`ensure` / `attach-hint` / `kill`); loads the session `.env` into the tmux env on `ensure` | init/resume/stop/end |
 | `aws-login.sh` | (Re)authenticate AWS SSO profiles — checks `sts get-caller-identity`, only runs `aws sso login` when expired, enforces the session `.env` allow-list | `#aws-reauth` |
 | `session-log.sh` | Append a consistent timestamped line to a session's `WORKLOG.md` / `CONTEXT.md` activity log | session-state rule + lifecycle commands |
@@ -50,6 +52,8 @@ pytest or the stdlib runner, and the whole suite runs from one command:
 | `tests/test_session_log.py` | `session-log.sh` timestamped append to WORKLOG / CONTEXT, `--to` targeting, append-not-clobber, error paths |
 | `tests/test_aws_login.py` | `aws-login.sh` expired/valid-token paths, `--all`/`--list`, allow-list enforcement — against a stubbed `aws` CLI, no real AWS |
 | `tests/test_security_check.py` | `security-check.sh` secrets/shell/actions checks each catch a real planted issue and pass on clean fixtures — against throwaway repos, no touching this repo's own history |
+| `tests/test_define_work_item.py` | `lib/define_work_item.py` pure logic — fresh-item seeding, field validation (status/scope enums), reshape preserves `sessions`/`history`/`current_state`, ticket-map merge (plain dicts, no I/O) |
+| `tests/test_define_work_item_sh.py` | `define-work-item.sh` end-to-end — CLI validation, lock release on success, stale-lock-with-dead-PID is broken (not waited out), a live holder is never preempted (wrapper times out cleanly instead), same-item concurrent writers never corrupt the file, different-item writers never contend |
 
 `scripts/tests/_harness.py` holds the shared helpers (throwaway git repos, a
 minimal work-sessions repo, a temp-dir base `TestCase`). Tests never touch real
