@@ -137,6 +137,64 @@ class ReshapeExistingItem(unittest.TestCase):
         self.assertEqual(item, existing)
 
 
+class LifecycleEventOptIn(unittest.TestCase):
+    """ADH-008 Phase 7: reshaping normally never touches history/current_state
+    (owned by the session lifecycle, not the constructor — see
+    ReshapeExistingItem above). `record_event`/`current_state_*` are the
+    explicit, opt-in override a session-lifecycle caller (init-session.sh)
+    uses to record its own event through the same locked write path,
+    instead of a second script racing on the same file."""
+
+    def _existing(self):
+        return {
+            "id": "PROJ-1", "title": "t", "description": "d", "status": "ready",
+            "current_state": {"description": "old", "is_blocked": False},
+            "history": [{"action": "groomed", "timestamp": "2026-08-01", "by": "pm"}],
+            "sessions": [],
+        }
+
+    def test_record_event_appends_history_even_on_reshape(self):
+        item = D.define_item(
+            self._existing(), item_id="PROJ-1", status="in progress",
+            record_event="session started", event_by="init-session.sh", now=NOW)
+        actions = [h["action"] for h in item["history"]]
+        self.assertEqual(actions, ["groomed", "session started"])
+        self.assertEqual(item["history"][-1]["by"], "init-session.sh")
+        self.assertEqual(item["history"][-1]["timestamp"], NOW)
+
+    def test_record_event_defaults_by_to_script_name(self):
+        item = D.define_item(self._existing(), item_id="PROJ-1", record_event="x", now=NOW)
+        self.assertEqual(item["history"][-1]["by"], "define-work-item.sh")
+
+    def test_no_record_event_leaves_history_untouched(self):
+        item = D.define_item(self._existing(), item_id="PROJ-1", status="in progress", now=NOW)
+        self.assertEqual(len(item["history"]), 1)
+
+    def test_current_state_description_overwrites_on_reshape(self):
+        item = D.define_item(
+            self._existing(), item_id="PROJ-1",
+            current_state_description="new state", now=NOW)
+        self.assertEqual(item["current_state"], {"description": "new state", "is_blocked": False})
+
+    def test_current_state_blocked_flag(self):
+        item = D.define_item(
+            self._existing(), item_id="PROJ-1",
+            current_state_description="waiting", current_state_blocked=True, now=NOW)
+        self.assertEqual(item["current_state"], {"description": "waiting", "is_blocked": True})
+
+    def test_fresh_item_gets_both_item_defined_and_the_recorded_event(self):
+        # A brand-new item created via a lifecycle call (e.g. init-session.sh
+        # registering a session with no prior groomed backlog entry) gets
+        # BOTH the constructor's own "item defined" entry AND the caller's
+        # event — more granular than the old upsert_wip.py behavior, not a
+        # regression (see scripts/README.md test note for this class).
+        item = D.define_item(
+            None, item_id="ADH-9", description="fresh", status="in progress",
+            record_event="session started", event_by="init-session.sh", now=NOW)
+        actions = [h["action"] for h in item["history"]]
+        self.assertEqual(actions, ["item defined", "session started"])
+
+
 class LegacyItemsWithoutSessionsField(unittest.TestCase):
     """Real existing items (pre-migration shape) have no `sessions` key."""
 

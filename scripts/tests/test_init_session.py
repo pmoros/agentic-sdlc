@@ -46,6 +46,15 @@ class InitSession(TempRepoCase):
         with open(os.path.join(self.ws, "work", name)) as fh:
             return json.load(fh)
 
+    def read_item(self, item_id):
+        return self.read_json(os.path.join("items", f"{item_id}.json"))
+
+    def write_item(self, item_id, item):
+        items_dir = os.path.join(self.ws, "work", "items")
+        os.makedirs(items_dir, exist_ok=True)
+        with open(os.path.join(items_dir, f"{item_id}.json"), "w") as fh:
+            json.dump(item, fh, indent=2)
+
     def test_creates_folder_registry_worktree_and_tmux(self):
         r = self.init()
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -80,67 +89,52 @@ class InitSession(TempRepoCase):
                 subprocess.run(["tmux", "has-session", "-t", f"={TMUX_NAME}"],
                                capture_output=True).returncode, 0)
 
-    def test_seeds_wip_entry_when_backlog_empty(self):
+    def test_seeds_item_when_none_exists(self):
         self.assertEqual(self.init().returncode, 0)
 
-        wip = self.read_json("wip.json")
-        self.assertIn(SID, wip)                                        # keyed by session id
-        item = wip[SID]
+        item = self.read_item(SID)
         self.assertEqual(item["status"], "in progress")               # picked up for active work
         self.assertIn("Self-test of init-session", item["title"])     # seeded from goal
         self.assertFalse(item["current_state"]["is_blocked"])         # not blocked by default
-        # ticket carried across from the session's --ticket
         self.assertIn("https://example.test/browse/ADH-1", json.dumps(item["tickets"]))
-        # append-only history has a "session started" entry
         self.assertTrue(any("session started" in h.get("action", "").lower()
                             for h in item["history"]), item["history"])
 
-        # backlog untouched, no stray placeholder key
+        # define-work-item.sh's automatic regenerate-views.sh call means the
+        # (derived) wip.json view picks the item up too, backlog stays empty.
+        wip_view = self.read_json("wip.json")
+        self.assertIn(SID, wip_view)
         self.assertEqual(self.read_json("backlog.json"), {})
 
-    def test_moves_backlog_item_to_wip(self):
-        backlog_item = {
-            "title": "Groomed backlog title",
+    def test_reshapes_existing_groomed_item_preserving_fields(self):
+        self.write_item(SID, {
+            "id": SID,
+            "title": "Groomed item title",
             "description": "already-shaped item",
             "status": "ready",
-            "tickets": {"main-bug-tracking": "https://example.test/browse/ADH-1"},
             "roadmap": [{"step": "do the thing", "owner": "me"}],
-        }
-        self.ws = make_work_sessions_repo(
-            self.tmp + "-bl", backlog={SID: backlog_item})
+            "current_state": {"description": "groomed, not started", "is_blocked": False},
+            "history": [{"action": "groomed", "timestamp": "2026-08-01", "by": "pm"}],
+            "sessions": [],
+        })
         self.assertEqual(self.init().returncode, 0)
 
-        wip = self.read_json("wip.json")
-        self.assertIn(SID, wip)
-        self.assertEqual(wip[SID]["status"], "in progress")           # flipped to in progress
-        self.assertEqual(wip[SID]["title"], "Groomed backlog title")  # groomed fields preserved
-        self.assertEqual(wip[SID]["roadmap"], backlog_item["roadmap"])
-        self.assertTrue(any("session started" in h.get("action", "").lower()
-                            for h in wip[SID]["history"]))
+        item = self.read_item(SID)
+        self.assertEqual(item["status"], "in progress")                # flipped
+        self.assertEqual(item["title"], "Groomed item title")          # groomed field preserved
+        self.assertEqual(item["roadmap"], [{"step": "do the thing", "owner": "me"}])
+        actions = [h["action"] for h in item["history"]]
+        self.assertEqual(actions, ["groomed", "session started"])      # appended, not reset
 
-        # item removed from backlog once moved to wip
-        self.assertNotIn(SID, self.read_json("backlog.json"))
-
-    def test_wip_upsert_is_idempotent_and_preserves_others(self):
-        # a pre-existing, unrelated wip entry must survive untouched
-        other = {"title": "someone else's work", "status": "in progress"}
-        self.ws = make_work_sessions_repo(
-            self.tmp + "-wip", wip={"OTHER-1": other})
+    def test_registration_does_not_touch_other_items(self):
+        self.write_item("OTHER-1", {
+            "id": "OTHER-1", "title": "someone else's work", "status": "in progress",
+            "current_state": {"description": "x", "is_blocked": False}, "history": [], "sessions": [],
+        })
         self.assertEqual(self.init().returncode, 0)
 
-        wip = self.read_json("wip.json")
-        self.assertEqual(wip["OTHER-1"], other)                       # untouched
-        self.assertIn(SID, wip)
-        first_history_len = len(wip[SID]["history"])
-
-        # re-running for the same id must be rejected (dup session) and must
-        # not duplicate or clobber the wip entry.
-        r = self.init()
-        self.assertNotEqual(r.returncode, 0)
-        wip2 = self.read_json("wip.json")
-        self.assertEqual(len([k for k in wip2 if k == SID]), 1)
-        self.assertEqual(len(wip2[SID]["history"]), first_history_len)
-        self.assertEqual(wip2["OTHER-1"], other)
+        self.assertEqual(self.read_item("OTHER-1")["title"], "someone else's work")
+        self.assertIn(SID, self.read_json("wip.json"))
 
     def test_requires_goal(self):
         r = run([SCRIPT, "ADH-x", "--work-sessions-repo", self.ws,
@@ -153,6 +147,52 @@ class InitSession(TempRepoCase):
         r = self.init()                                               # same id again
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("already exists", r.stderr)
+
+
+class MigrationSafetyGuard(TempRepoCase):
+    """ADH-008 Phase 7: init-session.sh must refuse rather than silently
+    derive views from an empty work/items/ while backlog.json/wip.json
+    still hold real, un-migrated content."""
+
+    def setUp(self):
+        super().setUp()
+        self.addCleanup(_kill_tmux)
+        self.agentic = make_remote_repo(self.tmp, "agentic")
+
+    def init(self, ws):
+        return run([
+            SCRIPT, SID, "--goal", "g", "--work-sessions-repo", ws,
+            "--agentic-sdlc-repo", self.agentic,
+        ], check=False)
+
+    def test_refuses_when_backlog_has_real_content_and_items_dir_absent(self):
+        ws = make_work_sessions_repo(self.tmp, backlog={"OLD-1": {"title": "t", "status": "grooming"}})
+        r = self.init(ws)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("migrate-items-v2.sh", r.stderr)
+        self.assertFalse(os.path.isdir(os.path.join(ws, "sessions", SID)))  # nothing created
+
+    def test_refuses_when_wip_has_real_content_and_items_dir_absent(self):
+        ws = make_work_sessions_repo(self.tmp, wip={"OLD-1": {"title": "t", "status": "in progress"}})
+        r = self.init(ws)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("migrate-items-v2.sh", r.stderr)
+
+    def test_proceeds_normally_when_backlog_and_wip_are_empty(self):
+        ws = make_work_sessions_repo(self.tmp)  # default: backlog={}, wip={}
+        r = self.init(ws)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_proceeds_normally_once_items_dir_is_populated(self):
+        ws = make_work_sessions_repo(self.tmp, backlog={"OLD-1": {"title": "t", "status": "grooming"}})
+        items_dir = os.path.join(ws, "work", "items")
+        os.makedirs(items_dir)
+        with open(os.path.join(items_dir, "OLD-1.json"), "w") as fh:
+            json.dump({"id": "OLD-1", "title": "t", "status": "grooming",
+                      "current_state": {"description": "", "is_blocked": False},
+                      "history": [], "sessions": []}, fh)
+        r = self.init(ws)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":

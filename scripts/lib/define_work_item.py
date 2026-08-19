@@ -72,12 +72,24 @@ def _seed_title(description, task_type):
 
 
 def define_item(existing, *, item_id, title=None, description=None, status=None,
-                 priority=None, scope=None, ticket=None, task_type=None, now=None):
+                 priority=None, scope=None, ticket=None, task_type=None, now=None,
+                 record_event=None, event_by="define-work-item.sh",
+                 current_state_description=None, current_state_blocked=False):
     """Return the shaped item dict for ``item_id``, merged onto ``existing``
     (``None`` for a brand new item). Pure — no I/O.
 
     Raises ``ValueError`` if ``status`` or ``scope`` is passed but not one of
     the recognized values.
+
+    ``record_event``/``event_by``/``current_state_description``/
+    ``current_state_blocked`` are the explicit, opt-in way for a caller that
+    needs to record a discrete event (``init-session.sh``: "session
+    started"; ``#triage-inbox``: "Triaged from INBOX") to do so through this
+    SAME locked write path — reshaping otherwise never touches
+    history/current_state (see the ``else`` branch below), by design, so a
+    plain field-reshaping call can never clobber them unless it explicitly
+    asks not to be. Applies regardless of ``is_new``, and regardless of
+    whether other fields were also reshaped in the same call.
     """
     is_new = existing is None
     item = dict(existing) if existing else {}
@@ -133,6 +145,17 @@ def define_item(existing, *, item_id, title=None, description=None, status=None,
             "is_blocked": False,
         })
 
+    if record_event:
+        history = list(item.get("history") or [])
+        history.append({"action": record_event, "timestamp": now, "by": event_by})
+        item["history"] = history
+
+    if current_state_description is not None:
+        item["current_state"] = {
+            "description": current_state_description,
+            "is_blocked": bool(current_state_blocked),
+        }
+
     return item
 
 
@@ -160,6 +183,10 @@ def main():
             ticket=os.environ.get("TICKET_ENV") or None,
             task_type=os.environ.get("TASK_TYPE_ENV") or None,
             now=os.environ.get("NOW_ENV", ""),
+            record_event=os.environ.get("RECORD_EVENT_ENV") or None,
+            event_by=os.environ.get("EVENT_BY_ENV") or "define-work-item.sh",
+            current_state_description=os.environ.get("CURRENT_STATE_DESCRIPTION_ENV") or None,
+            current_state_blocked=os.environ.get("CURRENT_STATE_BLOCKED_ENV", "") == "1",
         )
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"define-work-item: {exc}", file=sys.stderr)

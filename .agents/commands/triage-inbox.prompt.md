@@ -14,9 +14,9 @@ autonomous; Jira/GitHub writes need approval.
 
 Read, in order:
 - `<work>/work/INBOX.md` — the raw captures (newest on top).
-- `<work>/work/backlog.json` and `<work>/work/wip.json` — so you don't
-  duplicate an item that already exists.
-- `<work>/work/template.json` — the canonical item shape to copy.
+- `<work>/work/backlog.json` and `<work>/work/wip.json` — generated views;
+  read-only, so you don't duplicate an item that already exists. Never edit
+  these directly (see Step 3 — `define-work-item.sh` is the only writer).
 
 If `INBOX.md` has no entries below the header, report "Inbox is empty — nothing
 to triage" and stop.
@@ -33,36 +33,58 @@ For each capture, decide one of:
 Ask the user only when a capture is genuinely ambiguous (real work vs. noise);
 otherwise use your judgment and report your classification.
 
-## Step 3 — Shape each backlog item
+## Step 3 — Shape each backlog item via the canonical constructor
 
-Copy the structure from `template.json`. For each new item set:
+Every item is created/reshaped through `scripts/define-work-item.sh` —
+**never** by hand-writing JSON. Hand-shaping is what caused the historical
+`scope`/`weight` field-name drift between this command and the session-start
+path; the constructor is the fix (ADH-008 — see `SPEC.md` §1, §3 in
+`sessions/ADH-008-decouple-control-exec/`).
+
+For each new item, determine:
 
 - **ID** — the Jira key if one exists (e.g. `PROJ-1234`); otherwise the next
   `ADH-NNN` (scan `backlog.json`, `wip.json`, `scratchpad.json`, and
   `SESSIONS_STATE.md` for the highest `ADH-NNN` and increment).
-- **title** — short imperative summary.
 - **description** — what's going on and why it matters. Preserve any open
   questions from the capture as an explicit "Open Qs:" list.
 - **status** — `grooming` (default). Only use `ready` if the capture already
   contains a clear why/what + acceptance criteria (rare from raw inbox).
 - **priority** — record in the item (see priority note below). Ask the user if
   it's non-obvious and material.
-- **weight** — `XS | S | M | L | XL` effort estimate. Flag `L`/`XL` for
+- **scope** — `XS | S | M | L | XL` effort estimate. Flag `L`/`XL` for
   breakdown at planning.
-- **started** — today's date (`DD Month YYYY`).
-- **history** — one entry: action "Triaged from INBOX", ISO timestamp, `by`.
-- **tickets / work_items / resources** — carry over any links from the capture.
+- **ticket** — carry over a ticket link from the capture, if any.
+
+Then run, from the `agentic-sdlc` tools worktree:
+
+```bash
+scripts/define-work-item.sh <ID> \
+  --description "<description>" --status <grooming|ready> \
+  --priority "<priority>" --scope <XS|S|M|L|XL> [--ticket <url>] \
+  --record-event "Triaged from INBOX" --by "#triage-inbox" \
+  --work-sessions-repo <work-sessions-repo-path>
+```
+
+This writes `work/items/<ID>.json` and automatically regenerates
+`backlog.json`/`wip.json`/`archive.json` — never write those views by hand.
+`title` is auto-seeded from `--description`; pass `--title` explicitly only
+if the seeded one reads badly. Multiple `work_items`/`resources` links from
+a capture (beyond a single ticket) don't have a constructor flag yet — note
+them in the description, or file a follow-up to extend the constructor.
 
 ### Priority scale
 Use the Jira scale: `Trivial · Minor · Major · Critical · Blocker · Emergency`
 (default `Minor`). See `.agents/rules/atlassian.instructions.md`. Priority
-(urgency) and weight (effort) are independent — a `Blocker` can be `XS`.
+(urgency) and scope (effort) are independent — a `Blocker` can be `XS`.
 
-## Step 4 — Write and clean up
+## Step 4 — Clean up
 
-- Add the shaped items to `backlog.json` (or `scratchpad.json`), keyed by ID.
 - Remove each processed line from `INBOX.md` (leave the header and format note).
-- Do **not** touch existing items' `history`.
+- Scratchpad items go directly into `work/scratchpad.json` (unchanged —
+  explicitly out of scope for the item store; see `SPEC.md` Constraints).
+- Do **not** touch existing items' `history` — the constructor already
+  guarantees this (reshaping preserves it unless `--record-event` is passed).
 
 ## Step 5 — Offer next steps
 

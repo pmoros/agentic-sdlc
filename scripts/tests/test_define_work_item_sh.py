@@ -72,6 +72,23 @@ class DefineWorkItem(TempRepoCase):
         self.assertEqual(item["scope"], "M")
         self.assertEqual(len(item["history"]), 1)  # still just the original "item defined"
 
+    def test_record_event_appends_history_on_reshape(self):
+        self.define("ADH-9", ["--description", "d"])  # "item defined"
+        r = self.define("ADH-9", ["--status", "in progress",
+                                   "--record-event", "session started", "--by", "init-session.sh"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-9")
+        actions = [h["action"] for h in item["history"]]
+        self.assertEqual(actions, ["item defined", "session started"])
+        self.assertEqual(item["history"][-1]["by"], "init-session.sh")
+
+    def test_current_state_flag_sets_description_and_blocked(self):
+        self.define("ADH-9", ["--description", "d"])
+        r = self.define("ADH-9", ["--current-state", "waiting on review", "--blocked"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        item = self.read_item("ADH-9")
+        self.assertEqual(item["current_state"], {"description": "waiting on review", "is_blocked": True})
+
     def test_releases_lock_after_success(self):
         self.define("ADH-9", ["--description", "d"])
         self.assertFalse(os.path.exists(os.path.join(self.items_dir, "ADH-9.json.lock")))

@@ -21,7 +21,8 @@
 # USAGE
 #   define-work-item.sh <id> --title <t> --description <d> --status <s>
 #     [--priority <p>] [--scope <XS|S|M|L|XL>] [--ticket <id-or-url>]
-#     [--task-type <type>] [--work-sessions-repo <path>]
+#     [--task-type <type>] [--record-event <action>] [--by <name>]
+#     [--current-state <description>] [--blocked] [--work-sessions-repo <path>]
 #
 # OPTIONS
 #   --title <t>                   Item title. New item: seeded from
@@ -37,6 +38,24 @@
 #                                 the `main-bug-tracking` label.
 #   --task-type <type>            feat|fix|chore|refactor|docs|spike — used
 #                                 only to seed a new item's title.
+#   --record-event <action>       Explicit opt-in: append one history entry
+#                                 {action, timestamp: now, by}. Every other
+#                                 flag above only reshapes FIELDS — history/
+#                                 current_state/sessions are normally left
+#                                 untouched on an existing item, so an
+#                                 ordinary shaping call can never clobber
+#                                 them. A caller that needs to record a
+#                                 discrete event through this same locked
+#                                 write path (init-session.sh: "session
+#                                 started"; #triage-inbox: "Triaged from
+#                                 INBOX") passes this explicitly.
+#   --by <name>                   `by` for --record-event. Default:
+#                                 define-work-item.sh.
+#   --current-state <description> Explicit opt-in: overwrite
+#                                 current_state.description (+ is_blocked,
+#                                 via --blocked). Same opt-in as --record-event.
+#   --blocked                     Sets current_state.is_blocked true. Only
+#                                 meaningful with --current-state.
 #   --work-sessions-repo <path>   Default: sibling ../work-sessions of this
 #                                 repo.
 #   -h, --help                    Show this help.
@@ -44,7 +63,8 @@
 # Only fields explicitly passed change; everything else on an existing item
 # (including sessions[], history, current_state, roadmap) is preserved.
 # `current_state`/`history`/`sessions` are owned by the session lifecycle,
-# not this constructor — it only initializes them for a brand new item.
+# not this constructor — it only initializes them for a brand new item, or
+# when a caller explicitly opts in via --record-event/--current-state.
 #
 # ENV (test/tuning hooks — production defaults are fine as-is)
 #   DEFINE_ITEM_LOCK_TIMEOUT_SECS   Max seconds to wait for the lock. Default: 10.
@@ -70,6 +90,10 @@ PRIORITY=""
 SCOPE=""
 TICKET=""
 TASK_TYPE=""
+RECORD_EVENT=""
+EVENT_BY=""
+CURRENT_STATE_DESCRIPTION=""
+CURRENT_STATE_BLOCKED=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -81,6 +105,10 @@ while [[ $# -gt 0 ]]; do
     --scope)                  needval "$@"; SCOPE="$2"; shift 2 ;;
     --ticket)                 needval "$@"; TICKET="$2"; shift 2 ;;
     --task-type)              needval "$@"; TASK_TYPE="$2"; shift 2 ;;
+    --record-event)           needval "$@"; RECORD_EVENT="$2"; shift 2 ;;
+    --by)                     needval "$@"; EVENT_BY="$2"; shift 2 ;;
+    --current-state)          needval "$@"; CURRENT_STATE_DESCRIPTION="$2"; shift 2 ;;
+    --blocked)                CURRENT_STATE_BLOCKED=1; shift ;;
     --work-sessions-repo)     needval "$@"; WORK_SESSIONS_REPO="$2"; shift 2 ;;
     -*)                       die "unknown option: $1 (try --help)" ;;
     *)                        [[ -z "$ITEM_ID" ]] && ITEM_ID="$1" || die "unexpected arg: $1"; shift ;;
@@ -144,6 +172,9 @@ ITEM_ID_ENV="$ITEM_ID" ITEM_FILE_ENV="$ITEM_FILE" \
 TITLE_ENV="$TITLE" DESCRIPTION_ENV="$DESCRIPTION" STATUS_ENV="$STATUS" \
 PRIORITY_ENV="$PRIORITY" SCOPE_ENV="$SCOPE" TICKET_ENV="$TICKET" \
 TASK_TYPE_ENV="$TASK_TYPE" NOW_ENV="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+RECORD_EVENT_ENV="$RECORD_EVENT" EVENT_BY_ENV="$EVENT_BY" \
+CURRENT_STATE_DESCRIPTION_ENV="$CURRENT_STATE_DESCRIPTION" \
+CURRENT_STATE_BLOCKED_ENV="$CURRENT_STATE_BLOCKED" \
 python3 "$SCRIPT_DIR/lib/define_work_item.py" || die "failed to define item $ITEM_ID"
 
 err ">> wrote $ITEM_FILE"

@@ -85,6 +85,38 @@ TEMPLATE_DIR="$WORK_SESSIONS_REPO/session-template"
 SESSION_DIR="$WORK_SESSIONS_REPO/sessions/$SESSION_ID"
 [[ -e "$SESSION_DIR" ]] && die "session folder already exists: $SESSION_DIR"
 
+# --- migration safety guard (fail before any side effect) --------------
+# work/items/ becomes the source of truth once migrated (see
+# scripts/migrate-items-v2.sh); backlog.json/wip.json become generated
+# views. If work/items/ doesn't exist yet AND backlog.json/wip.json still
+# hold real (un-migrated) content, refuse now — before creating the
+# session folder, registering it in SESSIONS_STATE.md, or touching the
+# item store — rather than partway through. Starting a session here would
+# derive views from an empty item store while real un-migrated data sits
+# unreachable via those views.
+ITEMS_DIR="$WORK_SESSIONS_REPO/work/items"
+BACKLOG_JSON="$WORK_SESSIONS_REPO/work/backlog.json"
+WIP_JSON="$WORK_SESSIONS_REPO/work/wip.json"
+
+items_dir_populated() {
+  [[ -d "$ITEMS_DIR" ]] && [[ -n "$(ls -A "$ITEMS_DIR" 2>/dev/null)" ]]
+}
+
+json_object_nonempty() {
+  [[ -f "$1" ]] && python3 -c "
+import json, sys
+try:
+    data = json.load(open('$1'))
+except Exception:
+    sys.exit(1)
+sys.exit(0 if isinstance(data, dict) and data else 1)
+" 2>/dev/null
+}
+
+if ! items_dir_populated && { json_object_nonempty "$BACKLOG_JSON" || json_object_nonempty "$WIP_JSON"; }; then
+  die "work/items/ doesn't exist yet, but backlog.json/wip.json still hold real content — run 'scripts/migrate-items-v2.sh --dry-run' (then --commit) against $WORK_SESSIONS_REPO before starting a new session"
+fi
+
 err ">> creating session folder: $SESSION_DIR"
 mkdir -p "$(dirname "$SESSION_DIR")"
 cp -R "$TEMPLATE_DIR" "$SESSION_DIR"
@@ -161,23 +193,47 @@ fi
 
 err ">> registered $SESSION_ID in $STATE"
 
-# --- upsert the portfolio work/wip.json entry ---------------------------
-# The session-start ↔ portfolio-wip linkage: a started session must have a
-# matching `in progress` item in the work tracker. If the id already exists
-# in work/backlog.json, move it to wip (preserving its groomed fields);
-# otherwise seed a fresh wip entry from the session's goal/ticket/scope/
-# task-type. Idempotent — never duplicates an existing id, never clobbers
-# other entries. Skipped only if the work/ tracker isn't present at all.
-WIP_JSON="$WORK_SESSIONS_REPO/work/wip.json"
-BACKLOG_JSON="$WORK_SESSIONS_REPO/work/backlog.json"
-if [[ -f "$WIP_JSON" ]]; then
-  SID_ENV="$SESSION_ID" GOAL_ENV="$GOAL" TICKET_ENV="$TICKET" \
-  SCOPE_ENV="$SCOPE" TASK_TYPE_ENV="$TASK_TYPE" BLOCKERS_ENV="$BLOCKERS" \
-  NOW_ENV="$NOW" WIP_JSON_ENV="$WIP_JSON" BACKLOG_JSON_ENV="$BACKLOG_JSON" \
-  python3 "$SCRIPT_DIR/lib/upsert_wip.py" || die "failed to upsert wip.json entry for $SESSION_ID"
-  err ">> registered $SESSION_ID in $WIP_JSON (status: in progress)"
+# --- register the item in the per-item store (work/items/<id>.json) ----
+# The session-start <-> portfolio linkage: a started session must have a
+# matching `in progress` item. This calls the ONE canonical constructor,
+# define-work-item.sh, and asks it to record the "session started" event
+# through its own locked write path (--record-event/--current-state) —
+# replacing the old lib/upsert_wip.py, which duplicated this shaping logic
+# separately from #triage-inbox and had already diverged from it (ADH-008).
+# (The migration safety guard for this step already ran above, before any
+# side effect, in case it needed to refuse.)
+if [[ -f "$WIP_JSON" || -d "$ITEMS_DIR" ]]; then
+  ITEM_FILE="$ITEMS_DIR/$SESSION_ID.json"
+  ALREADY_ACTIVE=0
+  if [[ -f "$ITEM_FILE" ]]; then
+    CUR_STATUS="$(python3 -c "import json; print(json.load(open('$ITEM_FILE')).get('status',''))" 2>/dev/null || echo "")"
+    [[ "$CUR_STATUS" == "in progress" ]] && ALREADY_ACTIVE=1
+  fi
+
+  if [[ "$ALREADY_ACTIVE" -eq 1 ]]; then
+    err ">> $SESSION_ID already in progress in $ITEM_FILE — leaving item untouched (idempotent)"
+  else
+    DEFINE_ARGS=(--status "in progress" --record-event "session started" --by "init-session.sh")
+    if [[ -n "$BLOCKERS" ]]; then
+      DEFINE_ARGS+=(--current-state "$BLOCKERS" --blocked)
+    else
+      DEFINE_ARGS+=(--current-state "$GOAL")
+    fi
+    if [[ ! -f "$ITEM_FILE" ]]; then
+      # Fresh item — seed from the session details (mirrors the old
+      # upsert_wip.py "seed fresh" path). An existing/groomed item keeps
+      # its own title/description/scope/ticket untouched.
+      DEFINE_ARGS+=(--description "$GOAL")
+      [[ -n "$SCOPE" ]] && DEFINE_ARGS+=(--scope "$SCOPE")
+      [[ -n "$TICKET" ]] && DEFINE_ARGS+=(--ticket "$TICKET")
+      [[ -n "$TASK_TYPE" ]] && DEFINE_ARGS+=(--task-type "$TASK_TYPE")
+    fi
+    "$SCRIPT_DIR/define-work-item.sh" "$SESSION_ID" "${DEFINE_ARGS[@]}" --work-sessions-repo "$WORK_SESSIONS_REPO" \
+      || die "failed to register $SESSION_ID in the item store"
+    err ">> registered $SESSION_ID in $ITEM_FILE (status: in progress)"
+  fi
 else
-  err ">> note: no work/wip.json in $WORK_SESSIONS_REPO — skipped wip registration"
+  err ">> note: no work/wip.json or work/items/ in $WORK_SESSIONS_REPO — skipped item registration"
 fi
 
 # --- always create the agentic-sdlc tool worktree -----------------------
