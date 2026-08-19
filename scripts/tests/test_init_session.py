@@ -149,6 +149,118 @@ class InitSession(TempRepoCase):
         self.assertIn("already exists", r.stderr)
 
 
+class ReopenItem(TempRepoCase):
+    """ADH-011: --reopen-item <item-id> starts a new episode of an item
+    that already exists, instead of seeding a fresh one."""
+
+    ITEM_ID = "ADH-4-migrated-item"
+
+    def setUp(self):
+        super().setUp()
+        self.ws = make_work_sessions_repo(self.tmp)
+        self.agentic = make_remote_repo(self.tmp, "agentic")
+        self.addCleanup(_kill_tmux)
+
+    def read_json(self, name):
+        with open(os.path.join(self.ws, "work", name)) as fh:
+            return json.load(fh)
+
+    def read_item(self, item_id):
+        return self.read_json(os.path.join("items", f"{item_id}.json"))
+
+    def write_populated_item(self, status="done"):
+        items_dir = os.path.join(self.ws, "work", "items")
+        os.makedirs(items_dir, exist_ok=True)
+        with open(os.path.join(items_dir, f"{self.ITEM_ID}.json"), "w") as fh:
+            json.dump({
+                "id": self.ITEM_ID, "title": "Migrated item", "description": "d",
+                "status": status,
+                "current_state": {"description": "d", "is_blocked": False},
+                "history": [{"action": "item defined", "timestamp": "2026-07-01T00:00:00Z", "by": "x"}],
+                "sessions": [{
+                    "episode_id": self.ITEM_ID, "episode_number": 1,
+                    "folder": f"sessions/{self.ITEM_ID}", "opened": "2026-07-01T00:00:00Z",
+                    "closed": "2026-07-02T00:00:00Z",
+                }],
+            }, fh, indent=2)
+
+    def reopen(self, extra=()):
+        return run([
+            SCRIPT, "unused-positional-arg-ignored-with---reopen-item",
+            "--reopen-item", self.ITEM_ID,
+            "--goal", "Pick this item back up",
+            "--work-sessions-repo", self.ws,
+            "--agentic-sdlc-repo", self.agentic,
+            *extra,
+        ], check=False)
+
+    def test_refuses_when_item_file_does_not_exist(self):
+        r = self.reopen()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn(self.ITEM_ID, r.stderr)
+
+    def test_creates_episode_2_session_folder_and_appends_to_sessions(self):
+        self.write_populated_item()
+        r = self.reopen()
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        expected_sid = f"{self.ITEM_ID}--e2"
+        self.assertTrue(os.path.isdir(os.path.join(self.ws, "sessions", expected_sid)))
+
+        item = self.read_item(self.ITEM_ID)
+        self.assertEqual(len(item["sessions"]), 2)
+        self.assertEqual(item["sessions"][1]["episode_id"], expected_sid)
+        self.assertEqual(item["status"], "in progress")
+
+    def test_does_not_create_a_second_item_file_for_the_episode(self):
+        self.write_populated_item()
+        self.assertEqual(self.reopen().returncode, 0)
+        items_dir = os.path.join(self.ws, "work", "items")
+        self.assertEqual(sorted(os.listdir(items_dir)), [f"{self.ITEM_ID}.json"])
+
+    def test_sessions_state_row_has_item_column_pointing_at_the_item(self):
+        self.write_populated_item()
+        self.assertEqual(self.reopen().returncode, 0)
+        state = open(os.path.join(self.ws, "SESSIONS_STATE.md")).read()
+        row = next(l for l in state.splitlines() if l.startswith(f"| {self.ITEM_ID}--e2 |"))
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        self.assertEqual(cells[0], f"{self.ITEM_ID}--e2")
+        self.assertEqual(cells[1], self.ITEM_ID)
+
+    def test_episode_number_continues_past_two(self):
+        self.write_populated_item()
+        self.assertEqual(self.reopen().returncode, 0)                       # -> episode 2
+        # --open-episode correctly refuses a third episode while the second
+        # is still open (§3) — close it first, same as end_work_session
+        # would via --close-episode, before this test's own reopen.
+        close = run([
+            script("define-work-item.sh"), self.ITEM_ID,
+            "--close-episode", f"{self.ITEM_ID}--e2", "--outcome", "done",
+            "--work-sessions-repo", self.ws,
+        ], check=False)
+        self.assertEqual(close.returncode, 0, close.stderr)
+        r3 = run([
+            SCRIPT, "unused", "--reopen-item", self.ITEM_ID,
+            "--goal", "Pick it up again",
+            "--work-sessions-repo", self.ws, "--agentic-sdlc-repo", self.agentic,
+        ], check=False)
+        self.assertEqual(r3.returncode, 0, r3.stderr)
+        self.assertTrue(os.path.isdir(os.path.join(self.ws, "sessions", f"{self.ITEM_ID}--e3")))
+
+    def test_ordinary_non_reopen_session_row_item_column_defaults_to_session_id(self):
+        r = run([
+            SCRIPT, SID,
+            "--goal", "Ordinary session, no reopen",
+            "--work-sessions-repo", self.ws, "--agentic-sdlc-repo", self.agentic,
+        ], check=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        state = open(os.path.join(self.ws, "SESSIONS_STATE.md")).read()
+        row = next(l for l in state.splitlines() if l.startswith(f"| {SID} |"))
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        self.assertEqual(cells[0], SID)
+        self.assertEqual(cells[1], SID)
+
+
 class MigrationSafetyGuard(TempRepoCase):
     """ADH-008 Phase 7: init-session.sh must refuse rather than silently
     derive views from an empty work/items/ while backlog.json/wip.json
