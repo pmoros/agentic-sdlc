@@ -1,9 +1,35 @@
 # Toolbox Architecture: Control Plane / Execution Plane
 
 This document explains how the Agentic SDLC toolbox tracks work and runs
-sessions, after the ADH-008 / ADH-011 / ADH-012 refactor. It's a reference
-for understanding the model, not a tutorial — for step-by-step commands see
-[`cheatsheet.md`](cheatsheet.md).
+sessions, after the ADH-008 / ADH-011 / ADH-012 / ADH-014 / ADH-015
+refactors. It's a reference for understanding the model, not a tutorial —
+for step-by-step commands see [`cheatsheet.md`](cheatsheet.md).
+
+## Before an item exists — capture and triage
+
+Not everything starts as a Work Item. `work/INBOX.md` is the front
+door — raw, unsorted lines for anything that comes in (a Slack ping, an
+idea mid-meeting) before it's shaped into anything durable:
+
+```
+#capture-work → work/INBOX.md → #triage-inbox → work/items/<id>.json
+```
+
+`#capture-work` (ADH-015) is a guided, prompt-layer-only front door: a
+note plus optional `--source`/`--link`, sanitized (whitespace collapsed
+and trimmed) and inserted **unconditionally immediately after** the
+`<!-- newest entries at the top -->` marker — pushing existing entries
+down, so ordering stays newest-first regardless of how many captures
+accumulate. It assigns no priority, scope, or ticket; a hand-written
+bullet still works too, since `#triage-inbox` reads every line as free
+text. `INBOX.md` itself stays unlocked and hand-edited — the same
+low-stakes, pre-shaping status it's always had; nothing here goes through
+`define-work-item.sh`'s lock or fields.
+
+`#triage-inbox` is the actual promotion step: it reads each inbox line,
+assigns priority/scope, and creates the item via `define-work-item.sh` —
+the first point at which a capture becomes a real, durable Work Item.
+Everything below this section describes what happens from there on.
 
 ## The core split
 
@@ -81,7 +107,8 @@ racing a shared read-modify-write.
 | Tier | Fields | Who can set them |
 |---|---|---|
 | Plain reshape | `title`, `description`, `status`, `priority`, `scope`, `ticket`, `parent_id` | Any caller, any time — `--triage-inbox`, `--groom-item`, `--plan-cycle`, direct calls |
-| Session-lifecycle opt-in | `history` (append), `current_state`, `sessions[]`, `last_synced` | Only when the caller explicitly opts in (`--record-event`, `--current-state`, `--open-episode`/`--close-episode`, `--last-synced`) — an ordinary reshape call can never clobber these |
+| Append-only opt-in | `history` (append), `roadmap` (append) | Explicit opt-in (`--record-event`, `--roadmap-step`) — never overwritten, only ever grown. `roadmap` (ADH-014) is `{step, owner, target_date, type}`; `--roadmap-owner` is required, `--roadmap-target-date` defaults to the literal string `"TBD"` (not `""`) so `#review-backlog`'s gap heuristic still catches it |
+| Session-lifecycle opt-in | `current_state`, `sessions[]`, `last_synced` | Only when the caller explicitly opts in (`--current-state`, `--open-episode`/`--close-episode`, `--last-synced`) — an ordinary reshape call can never clobber these |
 
 That split is deliberate: it's what makes it safe for `#plan-cycle` to
 casually flip an item's `priority` without any risk of silently wiping its
@@ -176,6 +203,59 @@ flowchart TD
   from its children. Commands show a read-only roll-up count
   ("3/5 sub-items done") — a human decides what it means.
 
+## Ad hoc maintenance — `#define-work-item` and the two-tier guardrail
+
+`scripts/define-work-item.sh` was always the *only* constructor, but until
+ADH-014 it had no guided front door of its own — every session/backlog
+ceremony called it internally, and a one-off fix (a stuck item, a
+correction, recording a `roadmap` step) meant improvising a raw script
+call from first principles. `#define-work-item` closes that: bare shows
+an item's full current state; flagged shows current-vs-proposed and
+confirms before applying — same "read before you write" discipline every
+other command already follows.
+
+Some flags here are lifecycle-adjacent — they do something a ceremony
+command (`start-work-session`, `#end_work_session`) *also* does, just
+without that command's extra bookkeeping. This toolbox now has an
+established two-tier pattern for that class of flag, worth reusing
+whenever a similar case comes up:
+
+| Tier | Enforced where | Example | Behavior |
+|---|---|---|---|
+| **Tier 1 — hard refusal** | In `define-work-item.sh` itself, for *every* caller, not just the prompt command | `--status done` while the item's last episode is still open | Refused outright — this specific combination is genuine data corruption (archives the item with an un-reopenable open episode), not just a skipped convenience |
+| **Tier 2 — warn + confirm** | Prompt-layer only (`#define-work-item`) | `--status "in progress"`, `--open-episode`, `--close-episode` bypassing the close-checkpoint | Never blocks — names the ceremony command and what it additionally does, requires a **genuine human confirmation** per `AGENTS.md`'s Approval Protocol, never agent-inferred |
+
+The line between the two tiers is deliberately narrow: **corruption vs.
+convenience.** Only one Tier 1 case exists today — no generalized "which
+flags are which tier" policy engine was built for a set of one; add a new
+Tier 1 case only when a flag combination can actually corrupt state, not
+merely skip a nice-to-have step.
+
+The Tier 1 check is a good worked example of the lock-ordering discipline
+this toolbox already uses elsewhere (see the hierarchy section above): it
+runs **after** `define-work-item.sh` acquires the item's own lock,
+immediately before the write — not as a separately-timed pre-lock read,
+which would reopen the exact race it exists to close.
+
+### A hard-won convention: never interpolate into inline `python3 -c` source
+
+Both the Tier 1 check and the pre-existing `--parent`/`--promote`
+validation calls build a small inline Python script inside
+`define-work-item.sh`. Building that source by interpolating a shell
+variable directly into the Python string (`f"...{item_id}..."` via bash
+`"$VAR"` substitution) is **not just a style nit — it's arbitrary code
+execution.** A Gate B reviewer demonstrated this for real: a crafted item
+id containing `'+__import__('os').system(...)+'` broke out of the string
+literal and ran. The same pattern, already present in `--parent`/
+`--promote` and predating this finding, was exploitable the same way.
+
+Both were fixed the same way, now the standing convention for any new
+inline Python in this script: **pass values through the environment and
+read them with `os.environ`**, never interpolate into the source text.
+The main `define_item()` write call already did this — the fix was
+extending its own already-correct pattern to the newer call sites, not
+inventing something new.
+
 ## Gates — human-in-the-loop
 
 Every non-trivial change to this toolbox goes through two gates, reviewed
@@ -188,9 +268,24 @@ rationale) before a human signs off:
 | **Gate B** | Before merge | The actual diff against the (possibly-revised) design |
 
 Both gates are argued critiques with severities and citations, never a bare
-pass/fail — and they've caught real bugs in this exact codebase, including
-two separate concurrency races (episode numbering, and the hierarchy
-one-level invariant) that "looked" correct on first read.
+pass/fail — and they've caught real bugs in this exact codebase:
+
+- Two separate concurrency races (episode numbering, and the hierarchy
+  one-level invariant) that "looked" correct on first read.
+- ADH-014's Tier 1 check: a Gate B reviewer didn't just review the diff,
+  it *exploited* it — crafting an item id that broke out of an inline
+  `python3 -c` string and ran arbitrary code, then found the identical,
+  already-shipped pattern in `--parent`/`--promote` and fixed both (see
+  the convention above).
+- ADH-015's `#capture-work`: round 2 caught a genuine ordering bug in the
+  *round-1 fix itself* — "insert after the marker, or after the last
+  entry" inverts newest-at-top ordering from the second capture onward.
+  Caught by hand-tracing before a line of the command was written.
+
+The recurring lesson across all of these: an author's own
+confident-sounding correction is exactly the kind of claim a
+fresh-context reviewer exists to check, not take on faith — including the
+reviewer's own second-round pass over its first-round fix.
 
 ## External systems — batched, never piecemeal
 

@@ -26,11 +26,11 @@ Quick reference for every command and script flag in the toolbox. See
 |---|---|
 | `#capture-work [note] [--source] [--link]` | Guided, structured capture into `INBOX.md` — a note plus optional source/link, inserted newest-at-top. No priority/scope/ticket assignment |
 | `#triage-inbox` | Shape raw `INBOX.md` lines into Work Items (priority + scope) |
-| `#groom-item [id]` | Readiness checklist (why/what/AC/test-scenarios); flip `grooming → ready`. Shows parent/children roll-up; can link a breakdown right there via `--parent` |
+| `#groom-item [id]` | **Reconciles against existing work first (ADH-016)** — duplicate/superseded/already-delivered check before anything else. Readiness checklist (why/what/AC/test-scenarios); flip `grooming → ready`. Shows parent/children roll-up; can link a breakdown right there via `--parent` |
 | `#define-work-item [id] [flags...]` | Ad hoc control-plane maintenance for one Work Item — bare shows full state, flagged shows current-vs-proposed and confirms. Two-tier guardrails around lifecycle-adjacent flags |
 | `#review-backlog` | Stale/aging items, Jira mismatches, roadmap gaps, hierarchy roll-up; regenerates `WORK_STATE.md` |
 | `#review-wip` | WIP load, on-hold-too-long, blockers, bottlenecks; keep-going / ask-for-help / drop call |
-| `#plan-cycle` | Prioritize, break down `L`/`XL` items (now actually links via `--parent`), roadmap doc → `planning/` |
+| `#plan-cycle` | **Reconciles candidates against existing work first (ADH-016)** — duplicate/superseded/already-delivered/already-owned, before ranking or creating anything. Prioritize, break down `L`/`XL` items (links via `--parent`), roadmap doc → `planning/` |
 | `#run-retro` | What went well/wrong, when to have asked for help → `retros/` |
 
 ## `define-work-item.sh` — the one constructor
@@ -58,6 +58,11 @@ Only explicitly-passed fields change. Nothing is ever hand-edited in
 | `--close-episode <session-id> --outcome <done\|stopped\|paused>` | **Opt-in.** Close an episode; `outcome: done` also sets item `status → done` |
 | `--parent <parent-item-id>` | Link as a sub-item (validated: no self-parent, no two-level chain, target must not already be nested or already-a-parent) |
 | `--promote` | Clear `parent_id` (de-aggregate). Refuses if there's nothing to clear |
+| `--roadmap-step <text> --roadmap-owner <name>` | **Opt-in, append-only.** Append one `{step, owner, target_date, type}` entry to `roadmap[]`. `--roadmap-owner` required; `--roadmap-target-date` defaults to `"TBD"`, `--roadmap-type` defaults to `"standard"` |
+
+**Guardrails (ADH-014)** — enforced in the script itself, for every caller:
+- `--status done` + `--close-episode` together — refused outright, any outcome (redundant or contradictory).
+- `--status done` **without** `--close-episode`, while the item's last episode is still open — refused; use `--close-episode <session-id> --outcome done` instead. Checked *inside* the item's lock, immediately before the write.
 
 ## `init-session.sh` — session scaffolding
 
@@ -117,4 +122,27 @@ scripts/define-work-item.sh ADH-020 --record-event "waiting on review" \
 ```bash
 python3 -c "import json; d=json.load(open('work/items/ADH-020.json')); \
 print(d['status'], d.get('sessions'))"
+```
+
+**Quick capture, no ceremony (ADH-015):**
+```
+#capture-work "the retry logic in X drops the third failure" --source "code review"
+```
+Lands in `work/INBOX.md`, newest-at-top. No priority/scope/ticket yet —
+run `#triage-inbox` when ready to shape it into a real item.
+
+**Ad hoc fix without a session (ADH-014):**
+```
+#define-work-item ADH-020 --priority Major
+```
+Shows current-vs-proposed, confirms, applies via the same locked
+constructor path as every ceremony command. Bare `#define-work-item
+ADH-020` shows the item's full state (including `history`/`roadmap`/
+`sessions[]`) without changing anything.
+
+**Record a roadmap step:**
+```bash
+scripts/define-work-item.sh ADH-020 --roadmap-step "Ship the v2 API" \
+  --roadmap-owner "pmoros" --roadmap-target-date 2026-09-01 \
+  --work-sessions-repo <path>
 ```
