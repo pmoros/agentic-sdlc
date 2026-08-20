@@ -23,7 +23,20 @@ server — see `AGENTS.md` § MCP Setup).
 
 | Project | Key | Jira Instance | Issue Types |
 |---|---|---|---|
-| INFRA & OPS | `TBD` — confirm on first connect | `forgestop.atlassian.net` | `TBD` — confirm on first connect |
+| INFRA & OPS | `IO` | `forgestop.atlassian.net` | Task, Bug, Story, Epic, Sub-task, Spike, Critical Incident |
+| DASHBOARD | `DA` | `forgestop.atlassian.net` | Task, Bug, Story, Epic, Sub-task, Spike |
+| BATCHMAKER | `FB` | `forgestop.atlassian.net` | Task, Bug, Story, Epic, Sub-task, Spike |
+| AUTH APP | `AA` | `forgestop.atlassian.net` | Task, Bug, Story, Epic, Sub-task, Spike |
+
+`cloudId` = `2af0b82e-3b5c-4465-82e3-7e6a7d2ad596`. **Other projects** on the same site (client/other): DIA (Diageo India), IFA, JNX, MAN, NEO, OC, PI.
+
+**Project types & workflows** (discovered ADH-006; IO transitions verified 2026-08-16):
+
+- **IO — INFRA & OPS** (software, team-managed) — owns infra + platform CI/CD tooling + SOC 2 governance; unique **Critical Incident** issue type. Workflow: `To Do → In Progress → IN REVIEW → IN TESTING → READY TO DEPLOY → Done` (+ `Backlog`, `CANCELED`). No direct In Progress→Done — step through each state. Transition IDs: Backlog=`2`, In Progress=`3`, IN REVIEW=`4`, IN TESTING (transition name "QA")=`5`, READY TO DEPLOY ("Ready")=`6`, Done ("End")=`7`, CANCELED=`8`. Transition *names* differ from target *status* names — match on the transition's `to.name`, and re-fetch transitions after each hop (most non-global ones are only offered from the adjacent state).
+- **DA — DASHBOARD** (software, team-managed) — largest/most active project; backlog for the `forgestop-platform` monorepo. Migrated 31 Jul 2025 (legacy keys `FD`/`FE` still appear on old branches). Workflow: `BACKLOG / To Do → In Progress → IN REVIEW → IN TESTING → Done` (+ `Canceled`). Transition IDs not fully enumerated — call `getTransitionsForJiraIssue` before transitioning.
+- **FB — BATCHMAKER** (**business**-type project → weaker native dev-tool integration than the software projects). Workflow: `BACKLOG → To Do → In Progress → IN REVIEW → Done` (+ `CANCELED`; no IN TESTING observed).
+
+**Jira ↔ GitHub linkage:** convention-only — branches `<type>/<KEY-nnn>/<slug>`, PR titles `type(scope): … [KEY]`. No Smart Commits, no `Refs:` footers; not enforced (governance-as-IaC tracked under IO-89 / IO-260).
 
 ### Confluence spaces
 
