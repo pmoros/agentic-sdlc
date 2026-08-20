@@ -24,8 +24,10 @@ Quick reference for every command and script flag in the toolbox. See
 
 | Command | What it does |
 |---|---|
+| `#capture-work [note] [--source] [--link]` | Guided, structured capture into `INBOX.md` — a note plus optional source/link, inserted newest-at-top. No priority/scope/ticket assignment |
 | `#triage-inbox` | Shape raw `INBOX.md` lines into Work Items (priority + scope) |
 | `#groom-item [id]` | Readiness checklist (why/what/AC/test-scenarios); flip `grooming → ready`. Shows parent/children roll-up; can link a breakdown right there via `--parent` |
+| `#define-work-item [id] [flags...]` | Ad hoc control-plane maintenance for one Work Item — bare shows full state, flagged shows current-vs-proposed and confirms. Two-tier guardrails around lifecycle-adjacent flags |
 | `#review-backlog` | Stale/aging items, Jira mismatches, roadmap gaps, hierarchy roll-up; regenerates `WORK_STATE.md` |
 | `#review-wip` | WIP load, on-hold-too-long, blockers, bottlenecks; keep-going / ask-for-help / drop call |
 | `#plan-cycle` | Prioritize, break down `L`/`XL` items (now actually links via `--parent`), roadmap doc → `planning/` |

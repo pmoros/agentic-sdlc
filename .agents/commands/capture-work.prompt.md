@@ -52,14 +52,23 @@ triage time, not a parsing concern.
 
 ## Step 4 — Format the line
 
+Base line, always present:
 ```
-- <YYYY-MM-DD HH:MM> — <note>[ [source: <source>]][ [link: <link>]]
+- <YYYY-MM-DD HH:MM> — <note>
 ```
 
-Only include a bracketed suffix for a field that survived Step 3 (was
-supplied and non-empty after sanitizing). A note-only capture renders
-identically to `work/INBOX.md`'s original, pre-`#capture-work` format —
-no empty brackets, ever.
+Append ` [source: <source>]` if `--source` survived Step 3 (non-empty
+after sanitizing). Append ` [link: <link>]` if `--link` survived Step 3.
+Each suffix is entirely independent — append neither, either, or both,
+in that order (source before link) when both are present. A note-only
+capture renders identically to `work/INBOX.md`'s original,
+pre-`#capture-work` format — no empty brackets, ever, regardless of
+which suffixes are present.
+
+Examples:
+- Note only: `- 2026-08-19 19:00 — the retry logic in X drops the third failure`
+- Note + source only: `- 2026-08-19 19:00 — the retry logic in X drops the third failure [source: code review]`
+- Note + source + link: `- 2026-08-19 19:00 — the retry logic in X drops the third failure [source: code review] [link: https://example.com/pr/42]`
 
 ## Step 5 — Insert into `work/INBOX.md`
 
@@ -72,16 +81,21 @@ scratch file).
 
 Find the `<!-- newest entries at the top -->` marker line. Insert the
 new line **immediately after the marker, unconditionally** — before any
-entries already present below it, never after an existing entry. This is
-what keeps captures newest-at-top: each new insertion pushes everything
-already there further down, rather than accumulating in arrival order.
+entries already present below it, never after an existing entry, and
+with **no blank line** between the marker and the new bullet (exactly
+one newline separates them, same as between any two consecutive
+entries). This is what keeps captures newest-at-top: each new insertion
+pushes everything already there further down, rather than accumulating
+in arrival order.
 
 If the marker is missing or doesn't match exactly (e.g. reworded by a
 hand-edit), **stop and report** rather than guessing an insertion point
 — name what was expected and what was found, and do not write anything.
 
 Write the file back with the new line spliced in; every other existing
-line's content and relative order stays byte-identical.
+line's content and relative order stays byte-identical. This write, like
+all session/tracking-file writes in `work-sessions`, is autonomous — no
+approval gate, per this repo's Git Policy.
 
 ## Step 6 — Report and offer
 
