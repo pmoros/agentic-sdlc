@@ -25,6 +25,12 @@ ask which to groom (or offer to groom the highest-priority one).
   `.agents/rules/atlassian.instructions.md` for Jira reads.
 - If the item references docs/PRs/dashboards, skim them enough to judge whether
   they actually answer the open questions.
+- **Reconcile against existing work (avoid rework).** Search Jira (and
+  `wip.json`/sessions) for tickets that **duplicate**, **supersede**, or
+  **already deliver** this item. If it's a duplicate or already done, say so and
+  stop — never groom a duplicate to `ready`; recommend closing/merging or
+  re-statusing the existing ticket instead. Also confirm the item isn't already
+  owned/in-flight under a different key.
 - **Hierarchy (ADH-012)** — this is a read-only, computed display; nothing is
   written back to any item by this step:
   - If the item has a `parent_id`, read that parent's own file and show its
